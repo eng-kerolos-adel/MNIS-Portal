@@ -1,0 +1,242 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   MNIS Design System — "Clinical Clarity & Civic Trust"
+   Runtime tokens (no "color-" prefix) hold the actual light/dark values and
+   are swapped by the `.dark` class. `@theme inline` maps each one to a
+   `--color-*` Tailwind token, which is how utilities like `bg-primary` or
+   `text-on-surface` stay theme-aware without regenerating CSS per theme.
+   ========================================================================== */
+
+:root {
+  --surface: #f1fbff;
+  --surface-dim: #d1dce0;
+  --surface-bright: #f1fbff;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low: #eaf5fa;
+  --surface-container: #e4f0f4;
+  --surface-container-high: #dfeaef;
+  --surface-container-highest: #d9e4e9;
+  --on-surface: #131d21;
+  --on-surface-variant: #42474f;
+  --inverse-surface: #283236;
+  --inverse-on-surface: #e7f3f7;
+  --outline: #72777f;
+  --outline-variant: #c2c7d0;
+
+  --primary: #00375e;
+  --on-primary: #ffffff;
+  --primary-container: #1f4e79;
+  --on-primary-container: #d6e9ff;
+
+  --secondary: #006397;
+  --on-secondary: #ffffff;
+  --secondary-container: #cce5ff;
+  --on-secondary-container: #004b73;
+
+  --tertiary: #00694f;
+  --on-tertiary: #ffffff;
+  --tertiary-container: #cdf7e7;
+  --on-tertiary-container: #003d2f;
+
+  --success: #00875a;
+  --on-success: #ffffff;
+  --success-container: #e6f8f4;
+  --on-success-container: #00513a;
+
+  --warning: #8a5b00;
+  --on-warning: #ffffff;
+  --warning-container: #fff2d6;
+  --on-warning-container: #4d3400;
+
+  --error: #ba1a1a;
+  --on-error: #ffffff;
+  --error-container: #ffdad6;
+  --on-error-container: #93000a;
+
+  --background: #f5f6fa;
+  --on-background: #131d21;
+
+  --shadow-tint: 31, 78, 121;
+}
+
+.dark {
+  --surface: #0c1418;
+  --surface-dim: #0a1013;
+  --surface-bright: #33393c;
+  --surface-container-lowest: #060a0d;
+  --surface-container-low: #131c21;
+  --surface-container: #182126;
+  --surface-container-high: #222b30;
+  --surface-container-highest: #2d363b;
+  --on-surface: #e2ecf1;
+  --on-surface-variant: #c2c7d0;
+  --inverse-surface: #e2ecf1;
+  --inverse-on-surface: #131d21;
+  --outline: #8c9199;
+  --outline-variant: #42474f;
+
+  --primary: #a0cafc;
+  --on-primary: #00325a;
+  --primary-container: #184974;
+  --on-primary-container: #d1e4ff;
+
+  --secondary: #92ccff;
+  --on-secondary: #003353;
+  --secondary-container: #004b73;
+  --on-secondary-container: #cce5ff;
+
+  --tertiary: #85dabb;
+  --on-tertiary: #00382a;
+  --tertiary-container: #005140;
+  --on-tertiary-container: #a2f4d6;
+
+  --success: #6adbb0;
+  --on-success: #00382a;
+  --success-container: #005140;
+  --on-success-container: #a2f4d6;
+
+  --warning: #f8c26a;
+  --on-warning: #452b00;
+  --warning-container: #624000;
+  --on-warning-container: #ffddad;
+
+  --error: #ffb4ab;
+  --on-error: #690005;
+  --error-container: #93000a;
+  --on-error-container: #ffdad6;
+
+  --background: #0d1418;
+  --on-background: #e2ecf1;
+
+  --shadow-tint: 0, 0, 0;
+}
+
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-dim: var(--surface-dim);
+  --color-surface-bright: var(--surface-bright);
+  --color-surface-container-lowest: var(--surface-container-lowest);
+  --color-surface-container-low: var(--surface-container-low);
+  --color-surface-container: var(--surface-container);
+  --color-surface-container-high: var(--surface-container-high);
+  --color-surface-container-highest: var(--surface-container-highest);
+  --color-on-surface: var(--on-surface);
+  --color-on-surface-variant: var(--on-surface-variant);
+  --color-inverse-surface: var(--inverse-surface);
+  --color-inverse-on-surface: var(--inverse-on-surface);
+  --color-outline: var(--outline);
+  --color-outline-variant: var(--outline-variant);
+
+  --color-primary: var(--primary);
+  --color-on-primary: var(--on-primary);
+  --color-primary-container: var(--primary-container);
+  --color-on-primary-container: var(--on-primary-container);
+
+  --color-secondary: var(--secondary);
+  --color-on-secondary: var(--on-secondary);
+  --color-secondary-container: var(--secondary-container);
+  --color-on-secondary-container: var(--on-secondary-container);
+
+  --color-tertiary: var(--tertiary);
+  --color-on-tertiary: var(--on-tertiary);
+  --color-tertiary-container: var(--tertiary-container);
+  --color-on-tertiary-container: var(--on-tertiary-container);
+
+  --color-success: var(--success);
+  --color-on-success: var(--on-success);
+  --color-success-container: var(--success-container);
+  --color-on-success-container: var(--on-success-container);
+
+  --color-warning: var(--warning);
+  --color-on-warning: var(--on-warning);
+  --color-warning-container: var(--warning-container);
+  --color-on-warning-container: var(--on-warning-container);
+
+  --color-error: var(--error);
+  --color-on-error: var(--on-error);
+  --color-error-container: var(--error-container);
+  --color-on-error-container: var(--on-error-container);
+
+  --color-background: var(--background);
+  --color-on-background: var(--on-background);
+
+  --font-sans: var(--font-inter), var(--font-cairo), ui-sans-serif, system-ui, sans-serif;
+  --font-arabic: var(--font-cairo), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+}
+
+@layer base {
+  * {
+    border-color: var(--outline-variant);
+  }
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
+  body {
+    background-color: var(--background);
+    color: var(--on-surface);
+    overscroll-behavior: none;
+    font-family: var(--font-sans);
+  }
+  html[lang="ar"] body {
+    font-family: var(--font-arabic);
+  }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--outline-variant);
+    border-radius: 9999px;
+  }
+  :focus-visible {
+    outline: 2px solid var(--secondary);
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  .shadow-level-1 {
+    box-shadow:
+      0 1px 3px rgba(var(--shadow-tint), 0.06),
+      0 4px 12px rgba(var(--shadow-tint), 0.04);
+  }
+  .shadow-level-2 {
+    box-shadow:
+      0 4px 6px -1px rgba(var(--shadow-tint), 0.08),
+      0 10px 20px -3px rgba(var(--shadow-tint), 0.07);
+  }
+  .shadow-level-3 {
+    box-shadow:
+      0 20px 25px -5px rgba(var(--shadow-tint), 0.12),
+      0 10px 10px -5px rgba(var(--shadow-tint), 0.06);
+  }
+  .animate-fade-in {
+    animation: fadeIn 0.2s ease-out;
+  }
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
