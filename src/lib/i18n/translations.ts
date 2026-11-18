@@ -107,7 +107,7 @@ export const dictionaries = {
         compliance: "Compliance & KPIs",
       },
       analytics: {
-        ministries: "Quad-Ministries Hub",
+        ministries: "MoHP Strategic Decisions",
         overview: "Overview Command",
         uhia: "UHIA Coverage",
         facility: "Facility Capacity",
@@ -225,7 +225,7 @@ export const dictionaries = {
         compliance: "الامتثال ومؤشرات الأداء",
       },
       analytics: {
-        ministries: "القيادة الاستراتيجية للوزارات",
+        ministries: "القرارات الاستراتيجية لوزارة الصحة",
         overview: "غرفة القيادة العامة",
         uhia: "تغطية التأمين الصحي الشامل",
         facility: "الطاقة الاستيعابية للمنشآت",

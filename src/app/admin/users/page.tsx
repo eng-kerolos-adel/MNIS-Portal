@@ -220,12 +220,12 @@ export default function StaffUsersPage() {
             </CardTitle>
             <p className="text-xs text-on-surface-variant mt-1">
               {ar
-                ? "يتم تسجيل كل عملية وصول أو تعديل على ملفات المواطنين والروشتات والتحاليل والربط الوزاري تلقائياً عبر AuditInterceptor"
-                : "Every read/write action across patient records, prescriptions, labs, and ministry feeds is automatically recorded"}
+                ? "يتم تسجيل كل عملية وصول أو تعديل على ملفات المواطنين والروشتات والتحاليل والقرارات الاستراتيجية تلقائياً عبر AuditInterceptor"
+                : "Every read/write action across patient records, prescriptions, labs, and analytics is automatically recorded"}
             </p>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {["ALL", "PATIENT", "PRESCRIPTION", "LAB_SAMPLE", "NFC_CARD", "QUAD_MINISTRY_SYNC", "USER"].map((res) => (
+            {["ALL", "PATIENT", "PRESCRIPTION", "LAB_SAMPLE", "NFC_CARD", "ANALYTICS", "USER"].map((res) => (
               <button
                 key={res}
                 onClick={() => setResourceFilter(res)}

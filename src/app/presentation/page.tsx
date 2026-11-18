@@ -22,9 +22,6 @@ import {
   Sparkles,
   Award,
   Network,
-  GraduationCap,
-  ShoppingBag,
-  Briefcase,
   HeartPulse,
   ExternalLink,
   Search,
@@ -600,38 +597,38 @@ const ROLES_ENCYCLOPEDIA: RoleEncyclopedia[] = [
   {
     id: "executive",
     number: "06",
-    titleAr: "القيادة التنفيذية وغرفة عمليات الـ 4 وزارات (Executive Command)",
-    titleEn: "Quad-Ministry Sovereign Command & National Analytics",
+    titleAr: "القيادة التنفيذية والقرارات الاستراتيجية لوزارة الصحة (Executive Command)",
+    titleEn: "Ministry of Health Strategic Command & National Analytics",
     roleEnum: "EXECUTIVE",
     demoEmail: "exec@mnis.demo",
     demoPassword: "MnisDemo#2026!Secure",
     accentColor: "border-primary text-primary",
     badgeBg: "bg-primary text-on-primary",
     overview:
-      "غرفة القيادة الاستراتيجية التي تحول البيانات الطبية اللحظية لـ 120 مليون مواطن إلى قرارات سيادية في 4 وزارات (الصحة، التعليم العالي، التموين، القوى العاملة)، مع مراقبة التغطية التأمينية، الخرائط الوبائية، الذكاء الدوائي، وكشف الاحتيال.",
+      "غرفة القيادة الاستراتيجية التي تحول البيانات الطبية اللحظية لـ 120 مليون مواطن إلى قرارات سيادية لوزارة الصحة والسكان (الرصد الوبائي المبكر، سلسلة التبريد، المخزون الدوائي الحرج)، مع مراقبة التغطية التأمينية، الخرائط الوبائية، الذكاء الدوائي، وكشف الاحتيال.",
     keyResponsibilities: [
-      "إدارة غرفة التكامل السيادي للوزارات الأربع (/analytics/ministries) وتشغيل محاكي سقف بطاقات التموين (5 أفراد).",
+      "إدارة غرفة القرارات الاستراتيجية لوزارة الصحة والسكان (/analytics/ministries) لمتابعة الإنذار الوبائي وسلسلة التبريد والمخزون الحرج.",
       "مراقبة الخريطة الوبائية الجغرافية للمحافظات (/analytics/gis-epidemiology) وإنذارات التفشي بمعادلة Z-Score.",
       "متابعة الأداء المالي والتغطية لهيئة التأمين الصحي الشامل (/analytics/uhia-coverage).",
       "مراقبة سعة المستشفيات وأسرة الرعاية المركزة على مستوى الجمهورية (/analytics/facility-capacity).",
       "تشغيل محرك الذكاء الدوائي (/analytics/drug-intelligence) ومحرك كشف الاحتيال التأميني والشذوذ الإحصائي (/analytics/fraud-detection).",
     ],
     endToEndFlowSummary: [
-      "١. كل عملية كشف أو تحليل أو صرف دواء أو تسجيل مولود في المستشفيات تصب لحظياً في محرك التحليلات السيادي.",
-      "٢. في (/analytics/ministries) تراقب القيادة مؤشرات الـ 4 وزارات وتختبر محاكي وزارة التموين (الذي يحجب الإضافة التموينية تلقائياً بعد الفرد الخامس).",
+      "١. كل عملية كشف أو تحليل أو صرف دواء في المستشفيات تصب لحظياً في محرك التحليلات السيادي.",
+      "٢. في (/analytics/ministries) تراقب قيادة وزارة الصحة مؤشرات التفشي الوبائي (Z-Score) وسلامة سلسلة تبريد اللقاحات وأرصدة الأدوية الحرجة وبنوك الدم.",
       "٣. في (/analytics/gis-epidemiology) و(/analytics/fraud-detection) يتم رصد أي بؤرة وبائية أو تلاعب مالي وإصدار تقارير رسمية قابلة للتصدير.",
     ],
     screens: [
       {
-        nameAr: "١. غرفة التكامل السيادي للوزارات الأربع",
-        nameEn: "Quad-Ministry Sovereign Integration Hub",
+        nameAr: "١. غرفة القرارات الاستراتيجية لوزارة الصحة والسكان",
+        nameEn: "MoHP Strategic Decisions Command Hub",
         route: "/analytics/ministries",
-        purpose: "الربط اللحظي بين وزارات الصحة، التعليم العالي (تنسيق الطب والتمريض)، التموين (سقف الـ 5 أفراد)، والقوى العاملة (التكليف والإجهاد).",
-        inputsAndSearch: ["محاكي فحص استحقاق إضافة مولود جديد لبطاقة التموين (كود رب الأسرة، المحافظة، عدد الأفراد الحاليين)."],
-        actionsAndButtons: ["زر «فحص استحقاق الإضافة التموينية (Check Subsidy Eligibility)»."],
-        apisUsed: ["GET /v1/analytics/quad-ministries", "POST /v1/analytics/quad-ministries/family-check"],
-        dbTables: ["Patient", "User", "Bed", "LabSample", "Prescription", "DrugInventory", "AuditLog"],
-        realTimeImpact: "إصدار قرارات وزارية فورية مبنية على البيانات الحية.",
+        purpose: "مراقبة الإنذار الوبائي المبكر بالمحافظات (Z-Score)، سلسلة تبريد الأمصال، المخزون الدوائي الحرج، وتوزيع بنوك الدم والأسرة.",
+        inputsAndSearch: ["مؤشرات حية لعدد المواطنين، الزيارات، الطوارئ، العينات، وأكياس الدم."],
+        actionsAndButtons: ["زر «تحديث البيانات اللحظية» واستعراض حزمة القرارات التنفيذية المقترحة."],
+        apisUsed: ["GET /v1/analytics/quad-ministries"],
+        dbTables: ["Patient", "Bed", "ErCase", "LabSample", "Visit", "DrugInventory", "BloodUnit", "AuditLog"],
+        realTimeImpact: "إصدار قرارات فورية لوزارة الصحة مبنية على البيانات السريرية الحية.",
       },
       {
         nameAr: "٢. مركز القيادة والمؤشرات العامة",
@@ -703,12 +700,12 @@ const ROLES_ENCYCLOPEDIA: RoleEncyclopedia[] = [
         nameAr: "٨. التقارير التنفيذية الموحدة",
         nameEn: "Executive Strategic Reports",
         route: "/analytics/reports",
-        purpose: "توليد وتصدير تقارير رسمية شاملة عن أداء المنظومة الصحية والوزارات الأربع.",
+        purpose: "توليد وتصدير تقارير رسمية شاملة عن أداء المنظومة الصحية وقرارات وزارة الصحة.",
         inputsAndSearch: ["اختيار نوع التقرير والفترة الزمنية."],
         actionsAndButtons: ["طباعة وتصدير التقارير الرسمية."],
         apisUsed: ["GET /v1/analytics/overview", "GET /v1/analytics/quad-ministries"],
         dbTables: ["All Analytics Models"],
-        realTimeImpact: "دعم متخذي القرار في مجلس الوزراء والوزارات الأربع.",
+        realTimeImpact: "دعم متخذي القرار في وزارة الصحة وهيئة التأمين الصحي الشامل.",
       },
     ],
   },
@@ -778,19 +775,19 @@ const ROLES_ENCYCLOPEDIA: RoleEncyclopedia[] = [
     accentColor: "border-tertiary text-tertiary",
     badgeBg: "bg-tertiary text-on-tertiary",
     overview:
-      "تطبيق الموبايل الرسمي للمواطن المبني بـ Flutter 3 و Riverpod؛ يضع الهوية الطبية الوطنية (MTI) وكارت الطوارئ والمواعيد والروشتات والتحاليل والأشعة وحالة بطاقة التموين وسجل الرقابة في يد المواطن لحظة بلحظة.",
+      "تطبيق الموبايل الرسمي للمواطن المبني بـ Flutter 3 و Riverpod؛ يضع الهوية الطبية الوطنية (MTI) وكارت الطوارئ والمواعيد والروشتات والتحاليل والأشعة وحصص الأدوية المزمنة وسجل الرقابة في يد المواطن لحظة بلحظة.",
     keyResponsibilities: [
       "الدخول الآمن بالرقم القومي (14 رقماً) أو عبر أزرار الدخول التجريبي السريع بضغطة واحدة.",
       "استعراض البطاقة الطبية الوطنية (MTI) وفصيلة الدم والحساسيات والأمراض المزمنة.",
       "حجز مواعيد العيادات والمعمل ومتابعة تأكيدها، وطلب تجديد الروشتات المزمنة عن بُعد.",
       "استعراض نتائج التحاليل الرقمية المعتمدة وتقارير الأشعة التشخيصية (PACS).",
-      "متابعة حالة الأسرة التموينية (حد الـ 5 أفراد) وحصص الأدوية المزمنة الشهرية وسجل الرقابة السيادي (من شاهد ملفي).",
+      "متابعة التحويلات الطبية وحصص الأدوية المزمنة الشهرية وسجل الرقابة السيادي (من شاهد ملفي).",
       "توليد كود مشاركة مؤقت (10 أحرف لمدة 10 دقائق) لإعطائه للطبيب لفك قفل السجل الطبي الكامل.",
     ],
     endToEndFlowSummary: [
       "١. يفتح المواطن التطبيق ويسجل دخوله بالرقم القومي (أو زر الدخول التجريبي)، فيحصل على التوكن ويستدعي التطبيق بياناته الموحدة.",
       "٢. كل إجراء يتم في البوابة (تأكيد موعد، توقيع روشتة، صرف دواء، اعتماد نتيجة تحليل، رفع أشعة) يظهر فوراً في شاشات التطبيق مع إشعار فوري!",
-      "٣. في شاشة الملف الطبي الشامل، يشاهد المواطن الملخص السيادي (Summary Hub) الذي يربطه بوزارة التموين والصيدلية والمعمل وسجل الأمن.",
+      "٣. في شاشة الملف الطبي الشامل، يشاهد المواطن الملخص السيادي (Summary Hub) الذي يربطه بالعيادات والصيدلية والمعمل وسجل الأمن.",
     ],
     screens: [
       {
@@ -852,12 +849,12 @@ const ROLES_ENCYCLOPEDIA: RoleEncyclopedia[] = [
         nameAr: "٦. السجل الطبي والملخص السيادي الشامل (MedicalFileScreen)",
         nameEn: "lib/features/medical_file/presentation/screens/medical_file_screen.dart",
         route: "/analytics/ministries",
-        purpose: "عرض حالة التموين (حد الـ 5 أفراد)، الحصص المزمنة، الإحالات، الأشعة PACS، سجل الرقابة، ورفع الوثائق.",
+        purpose: "عرض الحصص المزمنة، الإحالات، الأشعة PACS، سجل الرقابة، ورفع الوثائق.",
         inputsAndSearch: ["رفع وثيقة طبية جديدة (عنوان + ملف Base64)."],
         actionsAndButtons: ["تحديث الملخص السيادي، رفع وثيقة، وحذف وثيقة."],
         apisUsed: ["GET /v1/me/summary-hub", "GET /v1/me/documents", "POST /v1/me/documents"],
         dbTables: ["ChronicAllowance", "Referral", "RadiologyUpload", "AuditLog", "Document"],
-        realTimeImpact: "شفافية مطلقة تربط المواطن بالوزارات الأربع وسجل الرقابة الأمني.",
+        realTimeImpact: "شفافية مطلقة تربط المواطن بالمنظومة الصحية وسجل الرقابة الأمني.",
       },
       {
         nameAr: "٧. كارت الطوارئ وكود المشاركة المؤقت (EmergencyQrScreen)",
@@ -888,7 +885,7 @@ const ROLES_ENCYCLOPEDIA: RoleEncyclopedia[] = [
 const CHAPTERS = [
   { id: "ch-hero", num: "01", label: "الرؤية القومية والمعمارية (120M)" },
   { id: "ch-roles", num: "02", label: "موسوعة الفلو التفصيلي لكل مستخدم وجهة" },
-  { id: "ch-ministries", num: "03", label: "الترابط السيادي للـ 4 وزارات + المحاكي" },
+  { id: "ch-ministries", num: "03", label: "القرارات الاستراتيجية لوزارة الصحة والسكان" },
   { id: "ch-Lifecycle", num: "04", label: "دورات الترابط اللحظي الـ 6 (End-to-End)" },
   { id: "ch-security", num: "05", label: "هندسة التشفير والأمن السيادي" },
   { id: "ch-database", num: "06", label: "قاعدة البيانات (27 جدول) والـ APIs" },
@@ -899,7 +896,6 @@ export default function MasterPresentationPage() {
   const [selectedRoleId, setSelectedRoleId] = useState<string>("doctor");
   const [screenSearch, setScreenSearch] = useState<string>("");
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
-  const [rationFamilyCount, setRationFamilyCount] = useState<number>(5);
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
 
   const activeRole = useMemo(
@@ -973,7 +969,7 @@ export default function MasterPresentationPage() {
               className="hidden md:inline-flex items-center gap-1.5 rounded-xl border border-outline-variant/50 bg-surface-container-low px-3 py-2 text-xs font-bold text-primary hover:bg-surface-container-high transition-colors"
             >
               <Building2 className="h-4 w-4 text-secondary" />
-              غرفة الـ 4 وزارات
+              استراتيجية وزارة الصحة
             </Link>
             <Link
               href="/emergency"
@@ -1084,11 +1080,11 @@ export default function MasterPresentationPage() {
                   <h1 className="text-2xl sm:text-4xl font-black leading-tight text-primary">
                     منظومة الهوية الطبية الوطنية الموحدة (MNIS)
                     <span className="block text-lg sm:text-2xl font-bold text-secondary mt-1">
-                      الشبكة السيادية لربط المستشفيات والمعامل والصيدليات وتطبيق المواطن بـ 4 وزارات استراتيجية في الوقت الفعلي
+                      الشبكة السيادية لربط المستشفيات والمعامل والصيدليات وتطبيق المواطن وغرفة قرارات وزارة الصحة في الوقت الفعلي
                     </span>
                   </h1>
                   <p className="text-sm sm:text-base leading-relaxed text-on-surface-variant">
-                    مشروع قومي متكامل يقضي جذرياً على تشتت التاريخ المرضي للمواطن المصري، ويمنح كل مواطن منذ لحظة الميلاد <strong>كود هوية طبية وطنية موحد (`MTI-EG-...`)</strong> مرتبطاً برقمه القومي المشفر (`AES-256-GCM`)، بحيث تتزامن فيه <strong>بوابة الكوادر الطبية (`32` شاشة ويب)</strong> مع <strong>الخادم المركزي (`85+` نقطة اتصال)</strong> مع <strong>تطبيق المواطن الذكي (`Flutter` — `8` شاشات)</strong> مع <strong>شرائح إنقاذ الحوادث (`NFC / QR`)</strong> ومع <strong>غرفة اتخاذ القرار لـ 4 وزارات سيادية</strong>.
+                    مشروع قومي متكامل يقضي جذرياً على تشتت التاريخ المرضي للمواطن المصري، ويمنح كل مواطن منذ لحظة الميلاد <strong>كود هوية طبية وطنية موحد (`MTI-EG-...`)</strong> مرتبطاً برقمه القومي المشفر (`AES-256-GCM`)، بحيث تتزامن فيه <strong>بوابة الكوادر الطبية (`32` شاشة ويب)</strong> مع <strong>الخادم المركزي (`85+` نقطة اتصال)</strong> مع <strong>تطبيق المواطن الذكي (`Flutter` — `8` شاشات)</strong> مع <strong>شرائح إنقاذ الحوادث (`NFC / QR`)</strong> ومع <strong>غرفة القرارات الاستراتيجية لوزارة الصحة والسكان</strong>.
                   </p>
                 </div>
 
@@ -1096,7 +1092,7 @@ export default function MasterPresentationPage() {
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8 pt-2">
                   {[
                     { value: "120M", label: "سعة تصميمية للمواطنين" },
-                    { value: "4 وزارات", label: "ترابط حكومي لحظي" },
+                    { value: "MoHP", label: "قرارات وزارة الصحة" },
                     { value: "9 جهات", label: "أدوار ومسارات عمل" },
                     { value: "40 شاشة", label: "32 ويب + 8 موبايل" },
                     { value: "27 جدول", label: "قاعدة بيانات PostgreSQL" },
@@ -1124,7 +1120,7 @@ export default function MasterPresentationPage() {
                   الهيكل المعماري الثلاثي والتقنيات المستخدمة (Tech Stack for 120M Citizens)
                 </h2>
                 <p className="text-xs sm:text-sm text-on-surface-variant mt-1">
-                  كيف تتكامل المنصات الثلاث (`mnis-portal` + `mnis-api` + `mnis_app`) مع قاعدة البيانات المشفرة والوزارات الأربع
+                  كيف تتكامل المنصات الثلاث (`mnis-portal` + `mnis-api` + `mnis_app`) مع قاعدة البيانات المشفرة وقرارات وزارة الصحة
                 </p>
               </div>
 
@@ -1422,17 +1418,17 @@ export default function MasterPresentationPage() {
           </section>
 
           {/* =================================================================
-              CHAPTER 3: THE 4 SOVEREIGN MINISTRIES & LIVE RATION SIMULATOR
+              CHAPTER 3: MINISTRY OF HEALTH (MoHP) STRATEGIC DECISIONS
           ================================================================= */}
           <section id="ch-ministries" className="scroll-mt-24 space-y-6">
             <div className="rounded-3xl border border-outline-variant/40 bg-surface-container-lowest p-6 sm:p-8 shadow-level-2 space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <span className="text-xs font-black uppercase tracking-wider text-secondary">
-                    الفصل الثالث • الحوكمة السيادية والترابط الوزاري الرباعي
+                    الفصل الثالث • القرارات الاستراتيجية لوزارة الصحة والسكان
                   </span>
                   <h2 className="mt-1 text-xl sm:text-3xl font-black text-primary">
-                    كيف تتصل الـ 4 وزارات استراتيجية بمنظومة الهوية الطبية الوطنية لحظياً؟
+                    كيف تدعم المنظومة متخذي القرار في وزارة الصحة والسكان لحظياً؟
                   </h2>
                 </div>
                 <Link
@@ -1440,12 +1436,12 @@ export default function MasterPresentationPage() {
                   className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-bold text-on-primary shadow-level-1"
                 >
                   <Building2 className="h-4 w-4" />
-                  افتح غرفة الـ 4 وزارات الحية (/analytics/ministries)
+                  افتح غرفة قرارات وزارة الصحة الحية (/analytics/ministries)
                 </Link>
               </div>
 
               <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-                {/* Ministry 1 */}
+                {/* Pillar 1 */}
                 <div className="rounded-2xl border border-outline-variant/50 bg-surface-container-low/50 p-5 space-y-3">
                   <div className="flex items-center gap-3">
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-on-primary">
@@ -1453,10 +1449,10 @@ export default function MasterPresentationPage() {
                     </div>
                     <div>
                       <h3 className="text-base sm:text-lg font-black text-primary">
-                        ١. وزارة الصحة والسكان (MoHP)
+                        ١. الرصد الوبائي المبكر بالـ Z-Score (Outbreak Early Warning)
                       </h3>
                       <p className="text-xs text-on-surface-variant">
-                        الرصد الوبائي المبكر، الأمصال وسلسلة التبريد، وبنوك الدم الاستراتيجية
+                        كشف التفشي الوبائي بالمحافظات وتوجيه القوافل الطبية فوراً
                       </p>
                     </div>
                   </div>
@@ -1464,122 +1460,82 @@ export default function MasterPresentationPage() {
                     Z_Score = (Current_Cases − Baseline_Mean) / Baseline_StdDev   →   Outbreak if Z &gt; 2.5
                   </div>
                   <ul className="space-y-1.5 text-xs text-on-surface leading-relaxed">
-                    <li>• <strong>المدخلات اللحظية:</strong> كل تشخيص `ICD-10` من العيادات + كل عينة معملية حرجة + أرصدة الأمصال وأكياس الدم في المستشفيات.</li>
-                    <li>• <strong>القرار الاستراتيجي الآلي:</strong> إطلاق إنذار تفشٍّ وبائي فوري (`CRITICAL_OUTBREAK`) في المحافظة التي يتجاوز فيها `Z-Score` حاجز `2.5`، وتوجيه قوافل الأمصال وأكياس الدم آلياً قبل انتشار العدوى.</li>
+                    <li>• <strong>المدخلات اللحظية:</strong> كل تشخيص `ICD-10` من العيادات + كل عينة معملية حرجة + بلاغات الطوارئ بالمحافظات.</li>
+                    <li>• <strong>القرار الاستراتيجي الآلي:</strong> إطلاق إنذار تفشٍّ وبائي فوري (`CRITICAL_OUTBREAK`) في المحافظة التي يتجاوز فيها `Z-Score` حاجز `2.5`، وتوجيه العيادات المتنقلة ومحاليل المكافحة آلياً.</li>
                   </ul>
                 </div>
 
-                {/* Ministry 2 */}
+                {/* Pillar 2 */}
                 <div className="rounded-2xl border border-outline-variant/50 bg-surface-container-low/50 p-5 space-y-3">
                   <div className="flex items-center gap-3">
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-secondary text-on-secondary">
-                      <GraduationCap className="h-6 w-6" />
+                      <Activity className="h-6 w-6" />
                     </div>
                     <div>
                       <h3 className="text-base sm:text-lg font-black text-primary">
-                        ٢. وزارة التعليم العالي والبحث العلمي (MoHESR)
+                        ٢. سلسلة التبريد ومخزون الأمصال واللقاحات (Vaccine Cold-Chain)
                       </h3>
                       <p className="text-xs text-on-surface-variant">
-                        التحكم الديناميكي في تنسيق كليات الطب البشري والتمريض حسب العجز الفعلي
+                        مراقبة مستشعرات التبريد القومية وأرصدة اللقاحات الاستراتيجية
                       </p>
                     </div>
                   </div>
                   <div className="rounded-xl bg-surface-container-lowest p-3 font-mono text-xs font-bold text-secondary border border-outline-variant/40" dir="ltr">
-                    Staff_Density = (Active_Doctors_or_Nurses / Governorate_Pop) × 1,000 vs WHO_Target
+                    Telemetry_Compliance = 99.8% across 1,420 Active Cold-Chain Sensors
                   </div>
                   <ul className="space-y-1.5 text-xs text-on-surface leading-relaxed">
-                    <li>• <strong>المدخلات اللحظية:</strong> أعداد الأطباء وأطقم التمريض المرخصين والعاملين فعلياً في كل محافظة مقارنة بالتعداد السكاني وحجم ضغط المستشفيات.</li>
-                    <li>• <strong>القرار الاستراتيجي الآلي:</strong> في المحافظات التي تعاني من عجز في الأطباء أو التمريض، يُصدر النظام توصية لمكتب التنسيق <strong>بخفض الحد الأدنى للقبول بكليات الطب أو التمريض الإقليمية</strong> (مثلاً `-1.5%` إلى `-2.8%`) مع شرط التكليف الإقليمي؛ وفي المحافظات المشبعة يوصي <strong>برفع التنسيق</strong>.</li>
+                    <li>• <strong>المدخلات اللحظية:</strong> قراءات درجات حرارة ثلاجات حفظ الأمصال المركزية والجرعات المتاحة لكل طعم قومي (OPV, MMR, BCG, Hep-B).</li>
+                    <li>• <strong>القرار الاستراتيجي الآلي:</strong> تأمين احتياطي استراتيجي يكفي من 4 إلى 8 أشهر ومنع إهدار أو فساد أي تشغيلة لقاحات.</li>
                   </ul>
                 </div>
 
-                {/* Ministry 3 */}
+                {/* Pillar 3 */}
                 <div className="rounded-2xl border border-outline-variant/50 bg-surface-container-low/50 p-5 space-y-3">
                   <div className="flex items-center gap-3">
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-tertiary text-on-tertiary">
-                      <ShoppingBag className="h-6 w-6" />
+                      <Pill className="h-6 w-6" />
                     </div>
                     <div>
                       <h3 className="text-base sm:text-lg font-black text-primary">
-                        ٣. وزارة التموين والتجارة الداخلية (MoSIT)
+                        ٣. المخزون الاستراتيجي للأدوية الحرجة وبنك الدم القومي
                       </h3>
                       <p className="text-xs text-on-surface-variant">
-                        تطبيق سقف الـ 5 أفراد للأسرة على بطاقة التموين وتوجيه الدعم الغذائي العلاجي
+                        منع نواقص الأدوية المنقذة للحياة وإعادة موازنة فصائل الدم والأسرة
                       </p>
                     </div>
                   </div>
                   <div className="rounded-xl bg-surface-container-lowest p-3 font-mono text-xs font-bold text-tertiary border border-outline-variant/40" dir="ltr">
-                    If (Current_Family_Members ≥ 5)  ⇒  Decision = BLOCK_RATION_ADDITION_EXCEEDS_5_CAP
+                    If (Drug_Stock ≤ Reorder_Threshold)  ⇒  REORDER_TRIGGERED
                   </div>
                   <ul className="space-y-1.5 text-xs text-on-surface leading-relaxed">
-                    <li>• <strong>القاعدة السيادية (سقف الـ 5 أفراد):</strong> بمجرد وصول عدد أفراد الأسرة إلى **5 أفراد**، يقوم النظام تلقائياً بقفل وإيقاف إضافة المولود السادس (أو أي فرد إضافي) على بطاقة التموين، بحيث لا يستطيع رب الأسرة إضافته للتموين، بينما يستمر المولود في التمتع الكامل بالرعاية الصحية والتطعيمات المجانية.</li>
-                    <li>• <strong>الأمن الغذائي الذكي:</strong> ربط نسب أنيميا الأطفال في تحاليل المعامل بتوجيه سلع تموينية مدعمة بالحديد والفيتامينات للمحافظات الأعلى إصابة.</li>
+                    <li>• <strong>المدخلات اللحظية:</strong> رصيد الصيدليات من الأنسولين ومضادات التجلط والمحاليل، وأرصدة أكياس الدم وإشغال أسرة العناية المركزة.</li>
+                    <li>• <strong>القرار الاستراتيجي الآلي:</strong> تفعيل أوامر الشراء الموحد وتوجيه حملات التبرع للفصائل الحرجة وإعادة توزيع الإحالات على الأسرة المتاحة.</li>
                   </ul>
                 </div>
 
-                {/* Ministry 4 */}
+                {/* Pillar 4 */}
                 <div className="rounded-2xl border border-outline-variant/50 bg-surface-container-low/50 p-5 space-y-3">
                   <div className="flex items-center gap-3">
                     <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary-container text-on-primary-container">
-                      <Briefcase className="h-6 w-6" />
+                      <ShieldCheck className="h-6 w-6" />
                     </div>
                     <div>
                       <h3 className="text-base sm:text-lg font-black text-primary">
-                        ٤. وزارة القوى العاملة / العمل (MoL)
+                        ٤. حوكمة التأمين الصحي الشامل (UHIA) وكشف التلاعب
                       </h3>
                       <p className="text-xs text-on-surface-variant">
-                        توزيع التكليف الطبي القومي ومراقبة مؤشر الإجهاد الوظيفي للأطقم الطبية
+                        متابعة التغطية بالمحافظات وكشف التلاعب الدوائي والمالي آلياً
                       </p>
                     </div>
                   </div>
                   <div className="rounded-xl bg-surface-container-lowest p-3 font-mono text-xs font-bold text-primary border border-outline-variant/40" dir="ltr">
-                    Burnout_Score = f(Clinic_Queue_Load, ER_Critical_Cases, Shift_Hours) ∈ [0, 100]
+                    UHIA Coverage + Multi-Doctor Shopping + Rapid Refill Anomaly Engine
                   </div>
                   <ul className="space-y-1.5 text-xs text-on-surface leading-relaxed">
-                    <li>• <strong>المدخلات اللحظية:</strong> ضغط الكشوفات اليومي وحالات الطوارئ والعمليات لكل طبيب وممرض، ونسب العجز في كل مستشفى.</li>
-                    <li>• <strong>القرار الاستراتيجي الآلي:</strong> توجيه حركة التكليف والانتداب الطبي لسد العجز، وإطلاق إنذار (`HIGH_RISK_FATIGUE`) عند ارتفاع مؤشر الإجهاد في أي مستشفى لحماية الأطقم الطبية ومنع الأخطاء.</li>
+                    <li>• <strong>المدخلات اللحظية:</strong> مطالبات الصيدليات (80% تغطية تأمينية) + التسويات المالية الشهرية + أنماط الصرف المتكرر.</li>
+                    <li>• <strong>القرار الاستراتيجي الآلي:</strong> رصد محاولات تكرار الصرف أو تعدد الأطباء وحماية ميزانية التأمين الصحي الشامل.</li>
                   </ul>
                 </div>
-              </div>
-
-              {/* Interactive Ministry of Supply 5-Member Cap Simulator right inside the page */}
-              <div className="rounded-2xl border-2 border-primary/25 bg-surface-container-low p-5 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h4 className="text-sm sm:text-base font-black text-primary">
-                      محاكي تفاعلي حي: محرك وزارة التموين وقاعدة الحد الأقصى (5 أفراد للأسرة)
-                    </h4>
-                    <p className="text-xs text-on-surface-variant">
-                      جرّب تغيير عدد أفراد الأسرة الحاليين لترى القرار السيادي اللحظي الذي يصدره المحرك (`POST /v1/analytics/quad-ministries/family-check`):
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {[3, 4, 5, 6].map((num) => (
-                      <button
-                        key={num}
-                        type="button"
-                        onClick={() => setRationFamilyCount(num)}
-                        className={`rounded-xl px-3.5 py-2 text-xs font-black transition-all ${
-                          rationFamilyCount === num
-                            ? "bg-primary text-on-primary shadow-level-1"
-                            : "bg-surface-container-lowest text-on-surface border border-outline-variant/50"
-                        }`}
-                      >
-                        {num} أفراد حالياً
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {rationFamilyCount >= 5 ? (
-                  <div className="rounded-xl border border-error/40 bg-error-container/50 p-4 text-xs sm:text-sm font-bold text-on-error-container">
-                    🚨 القرار السيادي الآلي (`BLOCK_RATION_ADDITION_EXCEEDS_5_CAP`): الأسرة وصلت إلى الحد الأقصى المقرر تموينياً ({rationFamilyCount} أفراد / السقف 5 أفراد). تم إيقاف وحجب إمكانية إضافة أي فرد جديد على بطاقة التموين لدى وزارة التموين تلقائياً، مع استمرار تمتع المولود بكامل التغطية الصحية والتطعيمات المجانية في منظومة الهوية الطبية الوطنية (`MNIS`).
-                  </div>
-                ) : (
-                  <div className="rounded-xl border border-tertiary/40 bg-tertiary-container/50 p-4 text-xs sm:text-sm font-bold text-on-tertiary-container">
-                    ✅ القرار السيادي الآلي (`ALLOW_RATION_ADDITION`): عدد أفراد الأسرة الحالي ({rationFamilyCount} أفراد) أقل من سقف الـ 5 أفراد. يُسمح لرب الأسرة بإضافة المولود الجديد على بطاقة التموين (المتبقي بعد هذه الإضافة: {5 - rationFamilyCount - 1} أفراد).
-                  </div>
-                )}
               </div>
             </div>
           </section>
@@ -1788,10 +1744,10 @@ export default function MasterPresentationPage() {
                         desc: "فرز الطوارئ وتسكين الأسرة، إدارة العناية المركزة، جدول العمليات الجراحية، بنك الدم المركزي، والإحالات الشبكية.",
                       },
                       {
-                        sector: "٦. الوزارات الأربع وتطبيق المواطن",
-                        models: "PushNotification, PushToken, Document + Quad-Ministry Aggregations",
+                        sector: "٦. وزارة الصحة وتطبيق المواطن",
+                        models: "PushNotification, PushToken, Document + MoHP Analytics Aggregations",
                         api: "/v1/analytics/*, /v1/me/*, /v1/notifications/*",
-                        desc: "محرك الوزارات الأربع (الصحة، التعليم العالي، التموين، القوى العاملة)، الملخص السيادي للمواطن، والإشعارات الفورية.",
+                        desc: "محرك القرارات الاستراتيجية لوزارة الصحة والسكان، الملخص السيادي للمواطن، والإشعارات الفورية.",
                       },
                     ].map((row, idx) => (
                       <tr key={idx} className="hover:bg-surface-container-low/50">
@@ -1850,7 +1806,7 @@ export default function MasterPresentationPage() {
                       { role: "أخصائي المعمل والأشعة (LAB_TECH)", login: "lab1@mnis.demo", href: "/lab/sample-intake" },
                       { role: "طاقم المستشفى والطوارئ (HOSPITAL_STAFF)", login: "er@mnis.demo", href: "/hospital/er-triage" },
                       { role: "موظف الاستقبال (RECEPTIONIST)", login: "reception@mnis.demo", href: "/reception/citizens" },
-                      { role: "القيادة والـ 4 وزارات (EXECUTIVE)", login: "exec@mnis.demo", href: "/analytics/ministries" },
+                      { role: "قيادة وزارة الصحة (EXECUTIVE)", login: "exec@mnis.demo", href: "/analytics/ministries" },
                       { role: "مدير النظام والأمن السيادي (ADMIN)", login: "admin@mnis.demo", href: "/admin/users" },
                       { role: "المواطن على تطبيق الموبايل (أحمد محمد علي)", login: "29304151234567 (MTI-EG-2930415)", href: "/emergency?token=NFC-EG-DEMO-001" },
                     ].map((r, i) => (

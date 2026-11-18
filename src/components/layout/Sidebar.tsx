@@ -24,7 +24,7 @@ const SECTOR_LINKS = [
   { href: "/lab/sample-intake", icon: FlaskConical, ar: "المعمل والأشعة", en: "Lab & PACS" },
   { href: "/hospital/er-triage", icon: Hospital, ar: "المستشفى والطوارئ", en: "Hospital & ER" },
   { href: "/reception/citizens", icon: UserCheck, ar: "الاستقبال والمواطنين", en: "Reception" },
-  { href: "/analytics/ministries", icon: BarChart3, ar: "غرفة الـ 4 وزارات", en: "4 Ministries" },
+  { href: "/analytics/ministries", icon: BarChart3, ar: "استراتيجية وزارة الصحة", en: "MoHP Strategy" },
   { href: "/admin/users", icon: Shield, ar: "الأمن والإدارة", en: "Admin & SOC" },
   { href: "/emergency", icon: Siren, ar: "طوارئ NFC", en: "NFC Emergency" },
   { href: "/presentation", icon: ShieldCheck, ar: "العرض الشامل والفلو", en: "Presentation & Flows" },

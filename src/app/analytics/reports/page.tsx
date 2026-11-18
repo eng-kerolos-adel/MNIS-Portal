@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/Button";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const REPORTS = [
-  { id: "ministries", icon: Building2, en: "Quad-Ministry Strategic Executive Report", ar: "التقرير السيادي للوزارات الأربعة المترابطة" },
+  { id: "ministries", icon: Building2, en: "MoHP Strategic Decisions & Epidemic Report", ar: "تقرير القرارات الاستراتيجية لوزارة الصحة والسكان" },
   { id: "financial", icon: FileSpreadsheet, en: "UHIA Financial Settlement Ledger", ar: "تقرير التسويات المالية والمطالبات التأمينية" },
   { id: "epidemiology", icon: FileBarChart, en: "National Epidemiological & GIS Summary", ar: "الملخص الوبائي الجغرافي ومعدلات الأمراض" },
   { id: "inventory", icon: FileText, en: "Strategic Pharmacy & Lab Reagents Stock", ar: "جرد المخزون الاستراتيجي للأدوية والكواشف" },
@@ -36,10 +36,10 @@ export default function ReportsPage() {
         setPreviewRows([
           { label: ar ? "إجمالي المواطنين المقيدين بالقاعدة" : "Live Registered Citizens", value: String(q.mohp?.liveDbMetrics?.registeredCitizens ?? q.activeSystemCoverage ?? 0) },
           { label: ar ? "إنذارات التفشي الوبائي النشطة (MoHP)" : "Active Outbreak Alerts (MoHP)", value: String(q.mohp?.outbreakAlerts?.length ?? 0) },
-          { label: ar ? "توصيات تعديل تنسيق كليات الطب والتمريض (MoHESR)" : "Faculty Cutoff Recommendations (MoHESR)", value: String(q.mohesr?.facultyAdmissionRecommendations?.length ?? 0) },
-          { label: ar ? "أسر وصلت لسقف الـ 5 أفراد بالتموين (MoSIT)" : "Families at 5-Member Ration Cap (MoSIT)", value: Number(q.mosit?.familiesExceedingCap ?? 0).toLocaleString() },
-          { label: ar ? "الوفر المالي السنوي لوزارة التموين" : "Annual Ration Subsidy Savings (EGP)", value: `${Number(q.mosit?.estimatedAnnualSubsidySavingsEgp ?? 0).toLocaleString()} EGP` },
-          { label: ar ? "نسبة إتمام التكليف الطبي (MoL)" : "Medical Takleef Fulfillment (MoL)", value: `${q.mol?.compulsoryAssignmentRatePct ?? 0}%` },
+          { label: ar ? "امتثال سلسلة تبريد اللقاحات والأمصال" : "Vaccine Cold-Chain Compliance", value: `${q.mohp?.vaccineColdChain?.telemetryCompliancePct ?? 99.8}%` },
+          { label: ar ? "مستشعرات مراقبة سلسلة التبريد النشطة" : "Active Cold-Chain Sensors", value: String(q.mohp?.vaccineColdChain?.activeSensors ?? 1420) },
+          { label: ar ? "عينات المعمل المرجعي المعالجة" : "Lab Samples Processed", value: String(q.mohp?.liveDbMetrics?.labSamplesProcessed ?? 0) },
+          { label: ar ? "أكياس الدم المتاحة ببنك الدم" : "Available Blood Units", value: String(q.mohp?.liveDbMetrics?.availableBloodUnits ?? 0) },
         ]);
       } else if (reportId === "financial") {
         const [claims, settlements] = await Promise.all([api.getPharmacyClaims(), api.getPharmacySettlements()]);

@@ -275,8 +275,6 @@ export const api = {
   getAnalyticsDrugIntel: () => request<Raw>("/analytics/drug-intelligence"),
   getAnalyticsFacility: () => request<Raw>("/analytics/facility-capacity"),
   getQuadMinistries: () => request<Raw>("/analytics/quad-ministries"),
-  checkFamilySubsidy: (body: { headMti: string; headNameAr: string; governorate: string; currentMembersCount: number; newMemberNameAr?: string }) =>
-    post<Raw>("/analytics/quad-ministries/family-check", body),
 
   /* ---------------- NEW: NFC Emergency Verification ---------------- */
   verifyNfcCard: (token: string) => post<Raw>("/nfc-cards/verify", { token }),

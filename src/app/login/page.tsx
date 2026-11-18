@@ -20,7 +20,7 @@ const DEMO_ROLES = [
   { labelAr: "المعمل والأشعة", labelEn: "Lab & PACS", email: "lab1@mnis.demo" },
   { labelAr: "المستشفى والطوارئ", labelEn: "Hospital & ER", email: "er@mnis.demo" },
   { labelAr: "مكتب الاستقبال", labelEn: "Reception", email: "reception@mnis.demo" },
-  { labelAr: "الـ 4 وزارات والقيادة", labelEn: "4 Ministries Exec", email: "exec@mnis.demo" },
+  { labelAr: "قيادة وزارة الصحة", labelEn: "MoHP Executive", email: "exec@mnis.demo" },
   { labelAr: "مدير النظام والأمن", labelEn: "System Admin", email: "admin@mnis.demo" },
 ];
 
