@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
-import { ClipboardCheck, ShieldCheck, AlertTriangle, CheckCircle2, Plus, Trash2, Save } from "lucide-react";
+import { ClipboardCheck, ShieldCheck, AlertTriangle, CheckCircle2, Plus, Trash2, Save, Flag } from "lucide-react";
+import { useAuth } from "@/lib/auth/AuthProvider";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { useToast } from "@/lib/toast/ToastProvider";
 import { useApiError } from "@/lib/api/useApiError";
-import { api } from "@/lib/data/service";
+import { api, patientId } from "@/lib/data/service";
 import type { LabResultPanel, LabResultRow } from "@/types/domain";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
@@ -26,6 +27,7 @@ const cell = "h-9 w-full rounded-md bg-surface-container-low px-2 text-sm outlin
 
 export default function ResultsEntryPage() {
   const { locale, t } = useLocale();
+  const { user: me } = useAuth();
   const { push } = useToast();
   const handleError = useApiError();
   const ar = locale === "ar";
@@ -33,6 +35,9 @@ export default function ResultsEntryPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft[]>([emptyRow()]);
   const [busy, setBusy] = useState(false);
+  const [flagType, setFlagType] = useState<"ALLERGY" | "CHRONIC_CONDITION">("CHRONIC_CONDITION");
+  const [flagEn, setFlagEn] = useState("");
+  const [flagAr, setFlagAr] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -66,6 +71,29 @@ export default function ResultsEntryPage() {
     try { await api.verifyLab(active.id); push("success", ar ? "تم اعتماد النتائج" : "Results verified"); await load(); } catch (e) { handleError(e); } finally { setBusy(false); }
   }
 
+  async function submitConditionFlag() {
+    if (!active || !flagEn.trim()) return;
+    setBusy(true);
+    try {
+      await api.createConditionFlag({
+        patientId: patientId(active.sample.patient),
+        sampleId: active.sample.id,
+        conditionEn: flagEn.trim(),
+        conditionAr: flagAr.trim() || flagEn.trim(),
+        conditionType: flagType,
+      });
+      push("success", ar ? "تم إرسال التنبيه السريري لاعتماد الطبيب المعالج" : "Clinical condition flag sent for physician review");
+      setFlagEn("");
+      setFlagAr("");
+    } catch (e) {
+      handleError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const sameSpecialistLock = me?.role === "LAB_TECH" && !!active?.sample.enteredById && active.sample.enteredById === me.id;
+
   const setCell = (i: number, k: keyof Draft, v: string) => setDraft((d) => d.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
 
   return (
@@ -98,7 +126,23 @@ export default function ResultsEntryPage() {
                 </div>
               )}
               <Card>
-                <CardHeader><CardTitle>{pick(active.sample.testPanel, locale)}</CardTitle><span className="font-mono text-xs text-on-surface-variant">{active.sample.barcode}</span></CardHeader>
+                <CardHeader>
+                  <div>
+                    <CardTitle>{pick(active.sample.testPanel, locale)}</CardTitle>
+                    <p className="text-[11px] text-on-surface-variant mt-0.5">
+                      {(active.sample.orderedBy.en || active.sample.orderedBy.ar) && (
+                        <span>{ar ? "طلب:" : "Ordered by:"} {pick(active.sample.orderedBy, locale)}</span>
+                      )}
+                      {active.sample.enteredBy && (
+                        <span> • {ar ? "إدخال:" : "Entered by:"} {pick(active.sample.enteredBy, locale)}</span>
+                      )}
+                      {active.sample.verifiedBy && (
+                        <span> • {ar ? "اعتماد:" : "Verified by:"} {pick(active.sample.verifiedBy, locale)}</span>
+                      )}
+                    </p>
+                  </div>
+                  <span className="font-mono text-xs text-on-surface-variant">{active.sample.barcode}</span>
+                </CardHeader>
                 <CardContent className="overflow-x-auto">
                   {awaitingEntry ? (
                     <div className="flex min-w-[560px] flex-col gap-2">
@@ -140,10 +184,35 @@ export default function ResultsEntryPage() {
               </Card>
               <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
                 <span className="flex items-center gap-2 text-xs text-on-surface-variant"><ShieldCheck className="h-4 w-4 text-tertiary" />
-                  {active.verified ? (ar ? "تم الاعتماد" : "Verified") : awaitingVerify ? (ar ? "يجب أن يعتمدها أخصائي غير الذي أدخلها" : "Must be verified by a different specialist than the one who entered it") : (ar ? "أدخل القيم ثم احفظ" : "Enter the values, then save")}
+                  {active.verified
+                    ? (ar ? "تم الاعتماد" : "Verified")
+                    : sameSpecialistLock
+                      ? (ar ? "يتطلب توقيع فني معمل ثانٍ أو طبيب لاعتماد النتيجة (Dual Sign-Off)" : "Requires a second lab tech or physician for Dual Sign-Off verification")
+                      : awaitingVerify
+                        ? (ar ? "يجب أن يعتمدها أخصائي غير الذي أدخلها" : "Must be verified by a different specialist than the one who entered it")
+                        : (ar ? "أدخل القيم ثم احفظ" : "Enter the values, then save")}
                 </span>
                 {awaitingEntry && <Button loading={busy} disabled={!validDraft} icon={<Save className="h-4 w-4" />} onClick={save}>{ar ? "حفظ النتائج" : "Save results"}</Button>}
-                {awaitingVerify && <Button loading={busy} icon={<CheckCircle2 className="h-4 w-4" />} onClick={verify}>{ar ? "اعتماد وإصدار" : "Verify & release"}</Button>}
+                {awaitingVerify && <Button loading={busy} disabled={sameSpecialistLock} icon={<CheckCircle2 className="h-4 w-4" />} onClick={verify}>{ar ? "اعتماد وإصدار" : "Verify & release"}</Button>}
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <Flag className="h-4 w-4 text-error" />
+                    {ar ? "رفع تنبيه حساسية أو مرض مزمن للطبيب المعالج" : "Flag Critical Condition / Allergy for Physician Approval"}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 gap-2 sm:grid-cols-4">
+                  <select className={cell} value={flagType} onChange={(e) => setFlagType(e.target.value as "ALLERGY" | "CHRONIC_CONDITION")}>
+                    <option value="CHRONIC_CONDITION">{ar ? "مرض مزمن مكتشف" : "Chronic Condition"}</option>
+                    <option value="ALLERGY">{ar ? "حساسية خطيرة" : "Allergy Alert"}</option>
+                  </select>
+                  <input className={cell} dir="ltr" placeholder="Condition (EN)" value={flagEn} onChange={(e) => setFlagEn(e.target.value)} />
+                  <input className={cell} placeholder="التشخيص / التنبيه (عربي)" value={flagAr} onChange={(e) => setFlagAr(e.target.value)} />
+                  <Button size="sm" variant="outline" loading={busy} disabled={!flagEn.trim()} onClick={submitConditionFlag}>
+                    {ar ? "إرسال للطبيب" : "Flag to Physician"}
+                  </Button>
+                </CardContent>
               </Card>
             </>
           )}

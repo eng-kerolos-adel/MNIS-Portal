@@ -27,6 +27,7 @@ export function NotificationsDropdown() {
 
   useEffect(() => {
     const fetchNotifs = async () => {
+      if (typeof document !== "undefined" && document.hidden && !open) return;
       try {
         const data = await api.getNotifications();
         setNotifs(data);
@@ -34,14 +35,8 @@ export function NotificationsDropdown() {
         console.error(e);
       }
     };
-    if (open) {
-      void fetchNotifs();
-    } else {
-      // also fetch once initially to get unread count
-      void fetchNotifs();
-    }
-    // simple polling every 30s
-    const int = setInterval(fetchNotifs, 30000);
+    void fetchNotifs();
+    const int = setInterval(fetchNotifs, 15000);
     return () => clearInterval(int);
   }, [open]);
 

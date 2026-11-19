@@ -50,9 +50,17 @@ export function Header({
 }) {
   const { t, locale } = useLocale();
   const { push } = useToast();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const router = useRouter();
   const ar = locale === "ar";
+  const role = user?.role ?? "";
+  const isClinicAst = user?.specialityEn === "CLINIC_ASSISTANT";
+  const isLabRec = user?.specialityEn === "LAB_RECEPTION";
+  const showGlobalSearch = !isClinicAst && !isLabRec;
+  const canQuickFile = ["DOCTOR", "HOSPITAL_STAFF", "ADMIN", "EXECUTIVE"].includes(role);
+  const canConsultOrQueue = ["DOCTOR", "ADMIN", "EXECUTIVE"].includes(role);
+  const canChronic = ["PHARMACIST", "ADMIN", "EXECUTIVE"].includes(role);
+  const canPacs = (role === "LAB_TECH" && !isLabRec) || role === "ADMIN" || role === "EXECUTIVE";
 
   const [query, setQuery] = useState("");
   const [openDropdown, setOpenDropdown] = useState(false);
@@ -61,6 +69,7 @@ export function Header({
   const [busyPatientId, setBusyPatientId] = useState<string | null>(null);
   const [quickModalPatient, setQuickModalPatient] = useState<NationalIdentity | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     function handleOutside(e: MouseEvent) {
@@ -68,8 +77,19 @@ export function Header({
         setOpenDropdown(false);
       }
     }
+    function handleShortcut(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        setOpenDropdown(true);
+      }
+    }
     document.addEventListener("mousedown", handleOutside);
-    return () => document.removeEventListener("mousedown", handleOutside);
+    document.addEventListener("keydown", handleShortcut);
+    return () => {
+      document.removeEventListener("mousedown", handleOutside);
+      document.removeEventListener("keydown", handleShortcut);
+    };
   }, []);
 
   useEffect(() => {
@@ -133,11 +153,13 @@ export function Header({
           </div>
         </div>
 
-        {/* Live In-Place Sovereign Citizen Search & Action Palette (Never redirects away) */}
+        {/* Live In-Place Sovereign Citizen Search & Action Palette (Hidden for sub-reception staff) */}
+        {showGlobalSearch ? (
         <div ref={containerRef} className="relative hidden flex-1 max-w-md md:block">
           <div className="relative flex items-center">
             <Search className="pointer-events-none absolute start-3 h-4 w-4 text-on-surface-variant" />
             <input
+              ref={searchInputRef}
               value={query}
               onFocus={() => setOpenDropdown(true)}
               onChange={(e) => {
@@ -153,12 +175,12 @@ export function Header({
               }}
               placeholder={
                 ar
-                  ? "بحث فوري بالاسم أو الرقم القومي (14 رقم) أو الكود الوطني MTI..."
+                  ? "بحث فوري بالاسم أو الرقم القومي (14 رقم) أو MTI..."
                   : "Instant search by Name, National ID (14 digits), or MTI..."
               }
-              className="w-full rounded-xl border border-outline-variant/40 bg-surface-container-low py-2 ps-9 pe-8 text-xs sm:text-sm text-on-surface outline-none transition-all placeholder:text-on-surface-variant focus:border-primary focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/20"
+              className="w-full rounded-xl border border-outline-variant/40 bg-surface-container-low py-2 ps-9 pe-16 text-xs sm:text-sm text-on-surface outline-none transition-all placeholder:text-on-surface-variant focus:border-primary focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/20"
             />
-            {query && (
+            {query ? (
               <button
                 type="button"
                 onClick={() => setQuery("")}
@@ -167,6 +189,10 @@ export function Header({
               >
                 <X className="h-3.5 w-3.5" />
               </button>
+            ) : (
+              <kbd className="pointer-events-none absolute end-2.5 hidden sm:inline-block rounded border border-outline-variant/50 bg-surface-container-lowest px-1.5 py-0.5 font-mono text-[10px] font-bold text-on-surface-variant">
+                Ctrl+K
+              </kbd>
             )}
           </div>
 
@@ -204,16 +230,22 @@ export function Header({
                           </div>
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setQuickModalPatient(p);
-                                  setOpenDropdown(false);
-                                }}
-                                className="truncate text-xs font-bold text-on-surface hover:text-primary hover:underline text-start"
-                              >
-                                {pick(p.fullName, locale)}
-                              </button>
+                              {canQuickFile ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setQuickModalPatient(p);
+                                    setOpenDropdown(false);
+                                  }}
+                                  className="truncate text-xs font-bold text-on-surface hover:text-primary hover:underline text-start"
+                                >
+                                  {pick(p.fullName, locale)}
+                                </button>
+                              ) : (
+                                <span className="truncate text-xs font-bold text-on-surface text-start">
+                                  {pick(p.fullName, locale)}
+                                </span>
+                              )}
                               <Badge tone="secondary">
                                 {p.sex === "male" ? t("common.male") : t("common.female")} • {p.age}
                               </Badge>
@@ -245,59 +277,69 @@ export function Header({
                       </div>
 
                       <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-outline-variant/25 pt-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setQuickModalPatient(p);
-                            setOpenDropdown(false);
-                          }}
-                          className="inline-flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1 text-[11px] font-bold text-on-primary hover:opacity-90"
-                        >
-                          <Eye className="h-3 w-3" />
-                          {ar ? "الملف الطبي السريع" : "Quick File"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setOpenDropdown(false);
-                            router.push(`/doctor/consultation?patientId=${encodeURIComponent(pid)}`);
-                          }}
-                          className="inline-flex items-center gap-1 rounded-lg bg-secondary-container px-2.5 py-1 text-[11px] font-bold text-on-secondary-container hover:opacity-90"
-                        >
-                          <Stethoscope className="h-3 w-3" />
-                          {ar ? "بدء الكشف" : "Consult"}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={busyPatientId === pid}
-                          onClick={() => quickAddToQueue(p)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-outline-variant/60 bg-surface-container-lowest px-2 py-1 text-[11px] font-semibold text-on-surface hover:bg-surface-container-high disabled:opacity-50"
-                        >
-                          <Plus className="h-3 w-3 text-tertiary" />
-                          {ar ? "+ للطابور" : "+ Queue"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setOpenDropdown(false);
-                            router.push(`/pharmacy/chronic-allowances?patientId=${encodeURIComponent(pid)}`);
-                          }}
-                          className="inline-flex items-center gap-1 rounded-lg border border-outline-variant/60 bg-surface-container-lowest px-2 py-1 text-[11px] font-semibold text-on-surface hover:bg-surface-container-high"
-                        >
-                          <Pill className="h-3 w-3 text-secondary" />
-                          {ar ? "حصص المزمن" : "Chronic"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setOpenDropdown(false);
-                            router.push(`/lab/radiology?patientId=${encodeURIComponent(pid)}`);
-                          }}
-                          className="inline-flex items-center gap-1 rounded-lg border border-outline-variant/60 bg-surface-container-lowest px-2 py-1 text-[11px] font-semibold text-on-surface hover:bg-surface-container-high"
-                        >
-                          <ScanLine className="h-3 w-3 text-primary" />
-                          {ar ? "الأشعة" : "PACS"}
-                        </button>
+                        {canQuickFile && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setQuickModalPatient(p);
+                              setOpenDropdown(false);
+                            }}
+                            className="inline-flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1 text-[11px] font-bold text-on-primary hover:opacity-90"
+                          >
+                            <Eye className="h-3 w-3" />
+                            {ar ? "الملف الطبي السريع" : "Quick File"}
+                          </button>
+                        )}
+                        {canConsultOrQueue && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenDropdown(false);
+                                router.push(`/doctor/consultation?patientId=${encodeURIComponent(pid)}`);
+                              }}
+                              className="inline-flex items-center gap-1 rounded-lg bg-secondary-container px-2.5 py-1 text-[11px] font-bold text-on-secondary-container hover:opacity-90"
+                            >
+                              <Stethoscope className="h-3 w-3" />
+                              {ar ? "بدء الكشف" : "Consult"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busyPatientId === pid}
+                              onClick={() => quickAddToQueue(p)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-outline-variant/60 bg-surface-container-lowest px-2 py-1 text-[11px] font-semibold text-on-surface hover:bg-surface-container-high disabled:opacity-50"
+                            >
+                              <Plus className="h-3 w-3 text-tertiary" />
+                              {ar ? "+ للطابور" : "+ Queue"}
+                            </button>
+                          </>
+                        )}
+                        {canChronic && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenDropdown(false);
+                              router.push(`/pharmacy/chronic-allowances?patientId=${encodeURIComponent(pid)}`);
+                            }}
+                            className="inline-flex items-center gap-1 rounded-lg border border-outline-variant/60 bg-surface-container-lowest px-2 py-1 text-[11px] font-semibold text-on-surface hover:bg-surface-container-high"
+                          >
+                            <Pill className="h-3 w-3 text-secondary" />
+                            {ar ? "حصص المزمن" : "Chronic"}
+                          </button>
+                        )}
+                        {canPacs && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenDropdown(false);
+                              router.push(`/lab/radiology?patientId=${encodeURIComponent(pid)}`);
+                            }}
+                            className="inline-flex items-center gap-1 rounded-lg border border-outline-variant/60 bg-surface-container-lowest px-2 py-1 text-[11px] font-semibold text-on-surface hover:bg-surface-container-high"
+                          >
+                            <ScanLine className="h-3 w-3 text-primary" />
+                            {ar ? "الأشعة" : "PACS"}
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => {
@@ -317,8 +359,15 @@ export function Header({
             </div>
           )}
         </div>
+        ) : (
+          <div className="hidden flex-1 md:block" />
+        )}
 
         <div className="flex items-center gap-2 sm:gap-3">
+          <span className="hidden items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 lg:inline-flex">
+            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            {ar ? "مزامنة حية" : "Live Sync"}
+          </span>
           <button
             onClick={() => push("warning", t("common.emergencyCall"), t("brand.supportLine") + " 15344")}
             className="hidden items-center gap-1.5 rounded-lg bg-error px-3 py-2 text-xs font-bold text-on-error shadow-level-1 transition-opacity hover:opacity-90 sm:flex"
@@ -422,28 +471,30 @@ export function Header({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <Button
-                icon={<Stethoscope className="h-4 w-4" />}
-                onClick={() => {
-                  const pid = patientId(quickModalPatient);
-                  setQuickModalPatient(null);
-                  router.push(`/doctor/consultation?patientId=${encodeURIComponent(pid)}`);
-                }}
-              >
-                {ar ? "فتح غرفة الكشف الطبي" : "Open Consultation"}
-              </Button>
-              <Button
-                variant="outline"
-                icon={<Plus className="h-4 w-4" />}
-                onClick={async () => {
-                  await quickAddToQueue(quickModalPatient);
-                  setQuickModalPatient(null);
-                }}
-              >
-                {ar ? "إدراج في طابور العيادة" : "Add to Clinic Queue"}
-              </Button>
-            </div>
+            {canConsultOrQueue && (
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <Button
+                  icon={<Stethoscope className="h-4 w-4" />}
+                  onClick={() => {
+                    const pid = patientId(quickModalPatient);
+                    setQuickModalPatient(null);
+                    router.push(`/doctor/consultation?patientId=${encodeURIComponent(pid)}`);
+                  }}
+                >
+                  {ar ? "فتح غرفة الكشف الطبي" : "Open Consultation"}
+                </Button>
+                <Button
+                  variant="outline"
+                  icon={<Plus className="h-4 w-4" />}
+                  onClick={async () => {
+                    await quickAddToQueue(quickModalPatient);
+                    setQuickModalPatient(null);
+                  }}
+                >
+                  {ar ? "إدراج في طابور العيادة" : "Add to Clinic Queue"}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </Modal>

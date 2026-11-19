@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
-import { Eye, EyeOff, Lock, ShieldCheck, User, Sparkles, Siren } from "lucide-react";
+import { Eye, EyeOff, Lock, ShieldCheck, User, Siren } from "lucide-react";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useApiError } from "@/lib/api/useApiError";
@@ -13,16 +13,6 @@ import { BRAND_LOGO_URL } from "@/lib/assets";
 import { Button } from "@/components/ui/Button";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { LanguageToggle } from "@/components/ui/LanguageToggle";
-
-const DEMO_ROLES = [
-  { labelAr: "الطبيب (د. طارق)", labelEn: "Doctor", email: "doctor@mnis.demo" },
-  { labelAr: "الصيدلي (ص. منى)", labelEn: "Pharmacist", email: "pharmacist@mnis.demo" },
-  { labelAr: "المعمل والأشعة", labelEn: "Lab & PACS", email: "lab1@mnis.demo" },
-  { labelAr: "المستشفى والطوارئ", labelEn: "Hospital & ER", email: "er@mnis.demo" },
-  { labelAr: "مكتب الاستقبال", labelEn: "Reception", email: "reception@mnis.demo" },
-  { labelAr: "قيادة وزارة الصحة", labelEn: "MoHP Executive", email: "exec@mnis.demo" },
-  { labelAr: "مدير النظام والأمن", labelEn: "System Admin", email: "admin@mnis.demo" },
-];
 
 export default function LoginPage() {
   const { locale, t } = useLocale();
@@ -38,25 +28,21 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (loading || !user) return;
-    router.replace(user.mustChangePassword ? "/change-password" : homeFor(user.role));
+    router.replace(user.mustChangePassword ? "/change-password" : homeFor(user.role, user.specialityEn));
   }, [user, loading, router]);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    await performLogin(identifier.trim(), password);
-  }
-
-  async function performLogin(email: string, pass: string) {
     setBusy(true);
     setNotice(null);
     try {
-      const u = await login(email, pass);
+      const u = await login(identifier.trim(), password);
       if (u.role === "PATIENT") {
         await logout();
         setNotice(
           ar
-            ? "هذه البوابة للكوادر الطبية فقط. استخدم تطبيق المواطن على الموبايل."
-            : "This portal is for clinical staff only. Please use the citizen mobile app."
+            ? "هذه البوابة للكوادر الطبية والإدارية فقط. يرجى استخدام تطبيق المواطن على الهاتف."
+            : "This portal is for authorized medical and administrative staff only. Citizens should use the mobile app."
         );
       }
     } catch (err) {
@@ -78,13 +64,6 @@ export default function LoginPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link
-            href="/presentation"
-            className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3.5 py-2 text-xs font-bold text-on-primary shadow-level-1 hover:opacity-90"
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            {ar ? "العرض التقديمي الشامل وفلو كل مستخدم ووزارة" : "Master Presentation & User Flows"}
-          </Link>
-          <Link
             href="/emergency"
             className="inline-flex items-center gap-1.5 rounded-xl bg-error px-3 py-2 text-xs font-bold text-on-error shadow-level-1 hover:opacity-90"
           >
@@ -97,7 +76,7 @@ export default function LoginPage() {
       </header>
 
       <main className="flex flex-1 items-center justify-center px-4 pb-12">
-        <div className="flex w-full max-w-lg flex-col gap-4">
+        <div className="flex w-full max-w-md flex-col gap-4">
           <form
             onSubmit={onSubmit}
             className="flex w-full flex-col gap-5 rounded-2xl border border-outline-variant/40 bg-surface-container-lowest p-7 shadow-level-2"
@@ -108,7 +87,9 @@ export default function LoginPage() {
               </span>
               <h1 className="text-xl font-bold text-primary">{ar ? "تسجيل دخول الكوادر" : "Staff sign-in"}</h1>
               <p className="text-sm text-on-surface-variant">
-                {ar ? "استخدم البريد الإلكتروني المسجل لدى الإدارة أو اختر دخولاً سريعاً أدناه" : "Use your staff email or pick a 1-click demo role below"}
+                {ar
+                  ? "أدخل البريد الإلكتروني الوظيفي وكلمة المرور المعتمدة من الإدارة"
+                  : "Sign in with your officially registered institutional email and password"}
               </p>
             </div>
 
@@ -159,29 +140,13 @@ export default function LoginPage() {
               {ar ? "دخول" : "Sign in"}
             </Button>
 
-            {/* 1-Click Demo Role Switcher for Live Discussion */}
-            <div className="border-t border-outline-variant/40 pt-4">
-              <p className="mb-2 text-center text-xs font-bold text-on-surface-variant">
-                {ar ? "دخول تجريبي فوري بضغطة واحدة لجميع القطاعات (للعرض والمناقشة):" : "1-Click Instant Demo Login across Sectors:"}
-              </p>
-              <div className="flex flex-wrap justify-center gap-1.5">
-                {DEMO_ROLES.map((r) => (
-                  <button
-                    key={r.email}
-                    type="button"
-                    disabled={busy}
-                    onClick={() => {
-                      const pw = "MnisDemo#2026!Secure";
-                      setIdentifier(r.email);
-                      setPassword(pw);
-                      void performLogin(r.email, pw);
-                    }}
-                    className="rounded-lg border border-outline-variant/50 bg-surface-container-low px-2.5 py-1.5 text-xs font-semibold text-on-surface hover:bg-primary-container hover:text-on-primary-container transition-colors"
-                  >
-                    {ar ? r.labelAr : r.labelEn}
-                  </button>
-                ))}
-              </div>
+            <div className="flex items-center justify-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-[11px] font-semibold text-on-surface-variant">
+              <ShieldCheck className="h-4 w-4 shrink-0 text-primary" />
+              <span>
+                {ar
+                  ? "الدخول مقتصر على الكوادر الطبية والإدارية المرخصة — جميع العمليات موثقة رقابياً"
+                  : "Authorized clinical and administrative staff only — all sessions are securely audited"}
+              </span>
             </div>
 
             <p className="text-center text-[11px] text-on-surface-variant">{t("common.poweredBy")}</p>

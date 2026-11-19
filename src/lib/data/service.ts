@@ -5,8 +5,8 @@
 import { request } from "@/lib/api/client";
 import { PORTRAITS } from "@/lib/assets";
 import type {
-  Bed, Bilingual, ERCase, LabResultPanel, LabResultRow, LabSample, Medication,
-  NationalIdentity, Prescription, QueueTicket,
+  Bed, Bilingual, ConditionFlagItem, ERCase, LabResultPanel, LabResultRow, LabSample, Medication,
+  NationalIdentity, PatientDocument, Prescription, QueueTicket,
 } from "@/types/domain";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -56,6 +56,8 @@ const mapVisit = (v: Raw): QueueTicket => ({
   status: kebab(v.status) as QueueTicket["status"],
   isEmergency: !!v.isEmergency,
   waitMinutes: minutesSince(v.arrivedAt),
+  doctorId: v.doctorId ?? undefined,
+  doctorName: v.doctor ? b(v.doctor.fullNameEn, v.doctor.fullNameAr) : undefined,
 });
 
 const mapMedication = (i: Raw): Medication => ({
@@ -74,8 +76,11 @@ const mapMedication = (i: Raw): Medication => ({
 const mapRx = (r: Raw): Prescription => ({
   id: r.id,
   patient: mapPatient(r.patient),
-  physician: b("", ""),
-  physicianLicense: "",
+  physician: r.physician ? b(r.physician.fullNameEn, r.physician.fullNameAr) : b("", ""),
+  physicianLicense: r.physician?.licenseNo ?? "",
+  verifiedBy: r.verifiedBy ? b(r.verifiedBy.fullNameEn, r.verifiedBy.fullNameAr) : undefined,
+  dispensedBy: r.dispensedBy ? b(r.dispensedBy.fullNameEn, r.dispensedBy.fullNameAr) : undefined,
+  signatureHash: r.signatureHash ?? undefined,
   createdAt: r.createdAt,
   diagnosis: b(r.diagnosisEn, r.diagnosisAr),
   icd10: r.icd10 ?? "",
@@ -85,18 +90,33 @@ const mapRx = (r: Raw): Prescription => ({
 });
 export const rxCode = (r: Prescription) => r.id.slice(0, 8).toUpperCase();
 
-const mapSample = (s: Raw): LabSample => ({
-  id: s.id,
-  barcode: s.barcode,
-  patient: mapPatient(s.patient),
-  testPanel: b(s.panelEn, s.panelAr),
-  sampleType: b(s.sampleTypeEn, s.sampleTypeAr),
-  orderedBy: b("", ""),
-  collectedAt: s.collectedAt,
-  priority: String(s.priority).toLowerCase() as LabSample["priority"],
-  status: kebab(s.status) as LabSample["status"],
-  results: Array.isArray(s.results) ? s.results.map(mapRow) : [],
-});
+const mapSample = (s: Raw): LabSample => {
+  const rawTypeEn = String(s.sampleTypeEn ?? "");
+  const rawTypeAr = String(s.sampleTypeAr ?? "");
+  const atEn = rawTypeEn.includes(" @ ") ? rawTypeEn.split(" @ ")[1]?.trim() : undefined;
+  const atAr = rawTypeAr.includes(" @ ") ? rawTypeAr.split(" @ ")[1]?.trim() : undefined;
+  return {
+    id: s.id,
+    barcode: s.barcode,
+    patient: mapPatient(s.patient),
+    testPanel: b(s.panelEn, s.panelAr),
+    sampleType: b(rawTypeEn.split(" @ ")[0], rawTypeAr.split(" @ ")[0]),
+    orderedBy: s.orderedBy ? b(s.orderedBy.fullNameEn, s.orderedBy.fullNameAr) : b("", ""),
+    facility:
+      atEn || atAr
+        ? b(atEn, atAr)
+        : s.orderedBy?.facilityEn || s.orderedBy?.facilityAr
+          ? b(s.orderedBy.facilityEn, s.orderedBy.facilityAr)
+          : undefined,
+    enteredById: s.enteredById ?? undefined,
+    enteredBy: s.enteredBy ? b(s.enteredBy.fullNameEn, s.enteredBy.fullNameAr) : undefined,
+    verifiedBy: s.verifiedBy ? b(s.verifiedBy.fullNameEn, s.verifiedBy.fullNameAr) : undefined,
+    collectedAt: s.collectedAt,
+    priority: String(s.priority).toLowerCase() as LabSample["priority"],
+    status: kebab(s.status) as LabSample["status"],
+    results: Array.isArray(s.results) ? s.results.map(mapRow) : [],
+  };
+};
 
 const mapRow = (r: Raw): LabResultRow => ({
   id: r.id, analyte: b(r.analyteEn, r.analyteAr), value: r.value, unit: r.unit,
@@ -132,14 +152,19 @@ const patch = <T>(path: string, body: unknown) => request<T>(path, { method: "PA
 export const api = {
   /* ---------------- queue & patients ---------------- */
   getQueue: async () => (await request<Raw[]>("/queue")).map(mapVisit),
-  callNext: async () => mapVisit(await post<Raw>("/queue/call-next")),
-  setVisitStatus: async (id: string, status: QueueTicket["status"]) => mapVisit(await patch<Raw>(`/queue/${id}/status`, { status: upper(status) })),
-  createTicket: (body: { patientId: string; reasonEn: string; reasonAr: string; isEmergency?: boolean }) => post<Raw>("/queue", body),
+  callNext: async (doctorId?: string) => mapVisit(await post<Raw>("/queue/call-next", doctorId ? { doctorId } : {})),
+  setVisitStatus: async (id: string, status: QueueTicket["status"], vitalsSummary?: string) =>
+    mapVisit(await patch<Raw>(`/queue/${id}/status`, { status: upper(status), ...(vitalsSummary ? { vitalsSummary } : {}) })),
+  createTicket: (body: { patientId: string; reasonEn: string; reasonAr: string; isEmergency?: boolean; doctorId?: string }) => post<Raw>("/queue", body),
   searchPatients: async (q: string) => (await request<Raw[]>(`/patients?q=${encodeURIComponent(q)}`)).map(mapPatient),
   getPatient: async (id: string) => mapPatient(await request<Raw>(`/patients/${id}`)),
+  getPatientDocuments: (patientId: string) => request<PatientDocument[]>(`/patients/${patientId}/documents`),
+  getPatientDocumentFile: (docId: string) => request<PatientDocument>(`/patients/documents/${docId}/file`),
+  reviewPatientDocument: (docId: string) => patch<PatientDocument>(`/patients/documents/${docId}/review`, {}),
 
   /* ---------------- prescriptions ---------------- */
-  getPrescriptions: async () => (await request<Raw[]>("/prescriptions")).map(mapRx),
+  getPrescriptions: async (patientId?: string) =>
+    (await request<Raw[]>(`/prescriptions${patientId ? `?patientId=${encodeURIComponent(patientId)}` : ""}`)).map(mapRx),
   createAndSignPrescription: async (body: {
     patientId: string; diagnosisEn: string; diagnosisAr: string; icd10?: string; isChronic?: boolean;
     items: { nameEn: string; nameAr: string; form?: string; dose: string; frequencyEn: string; frequencyAr: string; durationDays: number; quantity: number; substitutionAllowed?: boolean; isChronic?: boolean; monthlyAllowance?: number }[];
@@ -152,11 +177,25 @@ export const api = {
   rejectRx: async (id: string, reason: string) => mapRx(await post<Raw>(`/prescriptions/${id}/reject`, { reason })),
 
   /* ---------------- lab ---------------- */
-  getLabSamples: async () => (await request<Raw[]>("/lab/samples")).map(mapSample),
+  getLabSamples: async (patientId?: string) =>
+    (await request<Raw[]>(`/lab/samples${patientId ? `?patientId=${encodeURIComponent(patientId)}` : ""}`)).map(mapSample),
   getLabResultPanels: async (): Promise<LabResultPanel[]> =>
     (await request<Raw[]>("/lab/samples"))
       .filter((s) => ["PROCESSING", "RESULTS_ENTERED", "VERIFIED"].includes(s.status))
-      .map((s) => ({ id: s.id, sample: mapSample(s), rows: (s.results ?? []).map(mapRow), verified: s.status === "VERIFIED", entered: s.status !== "PROCESSING" } as LabResultPanel)),
+      .map((s) => ({
+        id: s.id,
+        sample: mapSample(s),
+        rows: (s.results ?? []).map(mapRow),
+        verified: s.status === "VERIFIED",
+        entered: s.status !== "PROCESSING",
+        verifiedBy: s.verifiedBy ? b(s.verifiedBy.fullNameEn, s.verifiedBy.fullNameAr) : undefined,
+      } as LabResultPanel)),
+  getConditionFlags: (patientId?: string) =>
+    request<ConditionFlagItem[]>(`/lab/samples/condition-flags${patientId ? `?patientId=${encodeURIComponent(patientId)}` : ""}`),
+  createConditionFlag: (body: { patientId: string; sampleId?: string; conditionEn: string; conditionAr: string; conditionType: "ALLERGY" | "CHRONIC_CONDITION" }) =>
+    post<ConditionFlagItem>("/lab/samples/condition-flags", body),
+  reviewConditionFlag: (id: string, status: "APPROVED" | "REJECTED", reviewNote?: string) =>
+    patch<ConditionFlagItem>(`/lab/samples/condition-flags/${id}/review`, { status, reviewNote }),
   setSampleStatus: async (id: string, status: LabSample["status"], rejectReason?: string) =>
     mapSample(await patch<Raw>(`/lab/samples/${id}/status`, { status: upper(status), rejectReason })),
   enterResults: (id: string, rows: { analyteEn: string; analyteAr: string; value: number; unit: string; refLow: number; refHigh: number }[]) =>
@@ -185,13 +224,36 @@ export const api = {
   resetCitizenPassword: (patientId: string) => post<{ temporaryPassword: string }>(`/reception/citizens/${patientId}/reset-password`),
   getAppointments: async () =>
     (await request<Raw[]>("/appointments")).map((a) => ({
-      id: a.id as string, patient: mapPatient(a.patient), preferredDate: a.preferredDate as string, reason: a.reason as string,
-      status: a.status as "REQUESTED" | "CONFIRMED" | "REJECTED" | "CANCELLED" | "COMPLETED", scheduledAt: (a.scheduledAt ?? null) as string | null,
+      id: a.id as string,
+      patient: mapPatient(a.patient),
+      type: (a.type ?? "CLINIC") as "CLINIC" | "LAB",
+      testPanel: (a.testPanel ?? null) as string | null,
+      preferredDate: a.preferredDate as string,
+      reason: a.reason as string,
+      status: a.status as "REQUESTED" | "CONFIRMED" | "REJECTED" | "CANCELLED" | "COMPLETED",
+      scheduledAt: (a.scheduledAt ?? null) as string | null,
       doctorId: (a.doctorId ?? null) as string | null,
+      doctor: a.doctor
+        ? {
+            id: a.doctor.id as string,
+            fullNameEn: a.doctor.fullNameEn as string,
+            fullNameAr: a.doctor.fullNameAr as string,
+            specialityEn: (a.doctor.specialityEn ?? null) as string | null,
+            specialityAr: (a.doctor.specialityAr ?? null) as string | null,
+            facilityEn: (a.doctor.facilityEn ?? null) as string | null,
+            facilityAr: (a.doctor.facilityAr ?? null) as string | null,
+          }
+        : null,
     })),
-  getDoctors: () => request<{ id: string; fullNameEn: string; fullNameAr: string; specialityEn?: string; specialityAr?: string }[]>("/doctors"),
+  getDoctors: () =>
+    request<{ id: string; fullNameEn: string; fullNameAr: string; specialityEn?: string; specialityAr?: string; facilityEn?: string; facilityAr?: string; licenseNo?: string }[]>("/doctors"),
+  getLabs: () =>
+    request<{ id: string; nameEn: string; nameAr: string; staffNameEn: string; staffNameAr: string; licenseNo?: string | null }[]>("/schedule/labs"),
+  getHospitals: () =>
+    request<{ id: string; nameEn: string; nameAr: string; staffNameEn: string; staffNameAr: string; licenseNo?: string | null }[]>("/schedule/hospitals"),
   getDoctorSlots: (doctorId: string, date: string) => request<{ slotStart: string; slotEnd: string }[]>(`/schedule/doctors/${doctorId}/slots?date=${encodeURIComponent(date)}`),
   confirmAppointment: (id: string, body: { scheduledAt: string; doctorId?: string; note?: string }) => post<Raw>(`/appointments/${id}/confirm`, body),
+  checkInAppointment: (id: string) => post<{ appointment: Raw; visit: { id: string; ticketNo: string } }>(`/appointments/${id}/check-in`),
   rejectAppointment: (id: string, note?: string) => post<Raw>(`/appointments/${id}/reject`, { note }),
   setAppointmentStatus: (id: string, status: string) => patch<Raw>(`/appointments/${id}/status`, { status }),
 
@@ -199,7 +261,13 @@ export const api = {
   getMySchedule: () => request<Raw[]>("/schedule/my"),
   upsertSchedule: (body: any) => post<Raw>("/schedule/my", body),
   deleteSchedule: (id: string) => request<Raw>(`/schedule/my/${id}`, { method: "DELETE" }),
-  getRenewals: async () => (await request<Raw[]>("/renewals")).map((r) => ({ id: r.id as string, patient: mapPatient(r.patient), createdAt: r.createdAt as string })),
+  getRenewals: async () =>
+    (await request<Raw[]>("/renewals")).map((r) => ({
+      id: r.id as string,
+      patient: mapPatient(r.patient),
+      createdAt: r.createdAt as string,
+      prescription: r.prescription ? mapRx({ ...r.prescription, patient: r.patient }) : undefined,
+    })),
   approveRenewal: (id: string) => post<{ renewalId: string; draftPrescriptionId: string }>(`/renewals/${id}/approve`),
   rejectRenewal: (id: string, note?: string) => post<Raw>(`/renewals/${id}/reject`, { note }),
   redeemShare: async (code: string) => {
@@ -213,13 +281,42 @@ export const api = {
   },
 
   /* ---------------- admin ---------------- */
-  listUsers: () => request<{ id: string; email: string | null; role: string; fullNameEn: string; fullNameAr: string; licenseNo: string | null; isActive: boolean; mustChangePassword: boolean }[]>("/admin/users"),
+  listUsers: () => request<{ id: string; email: string | null; role: string; fullNameEn: string; fullNameAr: string; licenseNo: string | null; specialityEn?: string | null; specialityAr?: string | null; facilityEn?: string | null; facilityAr?: string | null; isActive: boolean; mustChangePassword: boolean }[]>("/admin/users"),
+  getFacilities: () => request<{
+    key: string;
+    facilityType: "CLINIC" | "LAB" | "HOSPITAL" | "PHARMACY" | "COMMAND";
+    facilityEn: string;
+    facilityAr: string;
+    staffCount: number;
+    staff: { id: string; email: string | null; role: string; fullNameEn: string; fullNameAr: string; licenseNo: string | null; specialityEn?: string | null; specialityAr?: string | null; isActive: boolean }[];
+  }[]>("/admin/users/facilities"),
+  createFacilityBundle: (body: {
+    facilityType: "CLINIC" | "LAB" | "HOSPITAL";
+    facilityEn: string;
+    facilityAr: string;
+    primaryEmail: string;
+    primaryNameEn: string;
+    primaryNameAr: string;
+    secondaryEmail?: string;
+    secondaryNameEn?: string;
+    secondaryNameAr?: string;
+    specialityEn?: string;
+    specialityAr?: string;
+    licenseNo?: string;
+  }) => post<{
+    facilityType: string;
+    facilityEn: string;
+    facilityAr: string;
+    accounts: { user: Raw; temporaryPassword: string; roleLabelEn: string; roleLabelAr: string }[];
+  }>("/admin/users/facilities", body),
   getAuditLogs: () => request<Raw[]>("/admin/users/audit-logs"),
   getSecurityPosture: () => request<Raw>("/admin/users/security-posture"),
-  createStaff: (body: { email: string; role: string; fullNameEn: string; fullNameAr: string; licenseNo?: string }) =>
+  createStaff: (body: { email: string; role: string; fullNameEn: string; fullNameAr: string; licenseNo?: string; specialityEn?: string; specialityAr?: string; facilityEn?: string; facilityAr?: string }) =>
     post<{ user: { id: string }; temporaryPassword: string }>("/admin/users", body),
   setUserActive: (id: string, isActive: boolean) => patch<Raw>(`/admin/users/${id}/active`, { isActive }),
   resetUserPassword: (id: string) => post<{ temporaryPassword: string }>(`/admin/users/${id}/reset-password`),
+  getActiveSessions: () => request<{ id: string; ip?: string | null; userAgent?: string | null; createdAt: string; expiresAt: string }[]>("/auth/sessions"),
+  revokeAllSessions: () => post<{ revoked: number }>("/auth/sessions/revoke-all"),
 
   /* ---------------- NEW: Pharmacy ---------------- */
   getPharmacyClaims: () => request<Raw[]>("/pharmacy/claims"),
@@ -241,7 +338,7 @@ export const api = {
   cancelReferral: (id: string) => request<Raw>(`/referrals/${id}`, { method: "DELETE" }),
 
   /* ---------------- NEW: Advanced Lab ---------------- */
-  orderLabSample: (body: { patientId: string; panelEn: string; panelAr: string; sampleTypeEn: string; sampleTypeAr: string; priority?: "ROUTINE" | "URGENT" | "STAT" }) => post<Raw>("/lab/samples", body),
+  orderLabSample: (body: { patientId: string; panelEn: string; panelAr: string; sampleTypeEn: string; sampleTypeAr: string; priority?: "ROUTINE" | "URGENT" | "STAT"; targetLabUserId?: string }) => post<Raw>("/lab/samples", body),
   getLabReagents: () => request<Raw[]>("/lab/reagents"),
   createLabReagent: (body: any) => post<Raw>("/lab/reagents", body),
   updateLabReagent: (id: string, body: any) => patch<Raw>(`/lab/reagents/${id}`, body),

@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useAuth } from "@/lib/auth/AuthProvider";
+import { useAutoRefresh } from "@/lib/hooks/useAutoRefresh";
 import {
   Stethoscope,
   Plus,
@@ -19,17 +21,24 @@ import {
   ScanLine,
   ArrowUpRight,
   UserCheck,
+  Sparkles,
+  Activity,
+  FileText,
+  Printer,
+  CheckCircle2,
+  Eye,
 } from "lucide-react";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { useToast } from "@/lib/toast/ToastProvider";
 import { useApiError } from "@/lib/api/useApiError";
 import { api, patientId, rxCode } from "@/lib/data/service";
-import type { LabSample, Medication, NationalIdentity, Prescription, QueueTicket } from "@/types/domain";
+import type { LabSample, Medication, NationalIdentity, PatientDocument, Prescription, QueueTicket } from "@/types/domain";
 import { medicationSeed } from "@/lib/data/medicationSeed";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { SearchInput } from "@/components/ui/SearchInput";
+import { Modal } from "@/components/ui/Modal";
+import { OfficialPrintModal } from "@/components/ui/OfficialPrintModal";
 import { formatDate, pick } from "@/lib/utils/format";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -37,8 +46,10 @@ const input = "h-10 w-full rounded-lg bg-surface-container-low px-3 text-sm outl
 
 export default function ConsultationPage() {
   const { locale, t } = useLocale();
+  const { user: me } = useAuth();
   const { push } = useToast();
   const handleError = useApiError();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const urlPatientId = searchParams.get("patientId");
   const urlVisitId = searchParams.get("visitId");
@@ -47,8 +58,6 @@ export default function ConsultationPage() {
   const [queueTickets, setQueueTickets] = useState<QueueTicket[]>([]);
   const [visitId, setVisitId] = useState<string | null>(urlVisitId);
   const [patient, setPatient] = useState<NationalIdentity | null>(null);
-  const [allCitizens, setAllCitizens] = useState<NationalIdentity[]>([]);
-  const [citizenQuery, setCitizenQuery] = useState("");
   const [loading, setLoading] = useState(true);
 
   // Patient unified history
@@ -56,6 +65,10 @@ export default function ConsultationPage() {
   const [patientLabHistory, setPatientLabHistory] = useState<LabSample[]>([]);
   const [patientRadiology, setPatientRadiology] = useState<any[]>([]);
   const [patientAllowances, setPatientAllowances] = useState<any[]>([]);
+  const [patientDocs, setPatientDocs] = useState<PatientDocument[]>([]);
+  const [previewDoc, setPreviewDoc] = useState<PatientDocument | null>(null);
+  const [printRx, setPrintRx] = useState<Prescription | null>(null);
+  const [vitals, setVitals] = useState({ bp: "120/80", hr: "76", temp: "37.0", spo2: "98", glucose: "105" });
 
   const [meds, setMeds] = useState<(Medication & { isChronic?: boolean })[]>([]);
   const [dxEn, setDxEn] = useState("");
@@ -64,11 +77,17 @@ export default function ConsultationPage() {
   const [isChronicRx, setIsChronicRx] = useState(false);
   const [busy, setBusy] = useState(false);
   const [signedCode, setSignedCode] = useState<string | null>(null);
+  const [shareCode, setShareCode] = useState("");
+  const [redeemingShare, setRedeemingShare] = useState(false);
 
   const [refTarget, setRefTarget] = useState("HOSPITAL");
   const [refUrgency, setRefUrgency] = useState("ROUTINE");
   const [refReason, setRefReason] = useState("");
   const [labPanel, setLabPanel] = useState("Complete Blood Count (CBC)");
+  const [labsList, setLabsList] = useState<{ id: string; nameEn: string; nameAr: string }[]>([]);
+  const [hospitalsList, setHospitalsList] = useState<{ id: string; nameEn: string; nameAr: string }[]>([]);
+  const [targetLabId, setTargetLabId] = useState("");
+  const [targetHospitalId, setTargetHospitalId] = useState("");
 
   const [medModalOpen, setMedModalOpen] = useState(false);
   const [newMed, setNewMed] = useState({
@@ -84,20 +103,42 @@ export default function ConsultationPage() {
 
   const loadPatientHistory = useCallback(async (pid: string) => {
     try {
-      const [allRx, allLabs, rads, allow] = await Promise.all([
-        api.getPrescriptions(),
-        api.getLabSamples(),
+      const [rxList, labList, rads, allow, docs] = await Promise.all([
+        api.getPrescriptions(pid),
+        api.getLabSamples(pid),
         api.getRadiologyUploads(pid).catch(() => []),
         api.getChronicAllowances(pid).catch(() => []),
+        api.getPatientDocuments(pid).catch(() => []),
       ]);
-      setPatientRxHistory(allRx.filter((r) => patientId(r.patient) === pid));
-      setPatientLabHistory(allLabs.filter((s) => patientId(s.patient) === pid));
+      setPatientRxHistory(rxList);
+      setPatientLabHistory(labList);
       setPatientRadiology(rads);
       setPatientAllowances(allow);
+      setPatientDocs(docs);
     } catch {
       // ignore non-critical history errors
     }
   }, []);
+
+  async function openDocumentPreview(doc: PatientDocument) {
+    try {
+      const full = await api.getPatientDocumentFile(doc.id);
+      setPreviewDoc(full);
+    } catch (e) {
+      handleError(e);
+    }
+  }
+
+  async function approveDocument(docId: string) {
+    try {
+      await api.reviewPatientDocument(docId);
+      push("success", ar ? "تم اعتماد الوثيقة وإشعار المواطن على تطبيقه فوراً" : "Document reviewed & citizen notified");
+      if (patient) await loadPatientHistory(patientId(patient));
+      setPreviewDoc(null);
+    } catch (e) {
+      handleError(e);
+    }
+  }
 
   const selectCitizenById = useCallback(
     async (pid: string) => {
@@ -116,11 +157,18 @@ export default function ConsultationPage() {
 
   const load = useCallback(async () => {
     try {
-      const [q, citizens] = await Promise.all([api.getQueue(), api.searchPatients("")]);
+      const [q, labs, hospitals] = await Promise.all([
+        api.getQueue(),
+        api.getLabs().catch(() => []),
+        api.getHospitals().catch(() => []),
+      ]);
       setQueueTickets(q);
-      setAllCitizens(citizens);
+      setLabsList(labs);
+      setHospitalsList(hospitals);
+      if (labs.length > 0) setTargetLabId((cur) => cur || labs[0]!.id);
+      if (hospitals.length > 0) setTargetHospitalId((cur) => cur || hospitals[0]!.id);
 
-      const inConsult = q.filter((x) => x.status === "in-consultation" || x.status === "waiting");
+      const inConsult = q.filter((x) => x.status === "in-consultation");
       if (urlPatientId) {
         await selectCitizenById(urlPatientId);
       } else if (urlVisitId) {
@@ -129,12 +177,12 @@ export default function ConsultationPage() {
           setVisitId(matched.id);
           await selectCitizenById(patientId(matched.patient));
         }
-      } else if (inConsult.length > 0) {
-        const first = (q.find((x) => x.status === "in-consultation") ?? inConsult[0])!;
-        setVisitId(first.id);
-        await selectCitizenById(patientId(first.patient));
-      } else if (citizens.length > 0 && citizens[0]) {
-        await selectCitizenById(patientId(citizens[0]));
+      } else if (inConsult.length > 0 && inConsult[0]) {
+        setVisitId(inConsult[0].id);
+        await selectCitizenById(patientId(inConsult[0].patient));
+      } else {
+        setVisitId(null);
+        setPatient(null);
       }
     } catch (e) {
       handleError(e);
@@ -147,16 +195,22 @@ export default function ConsultationPage() {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    if (!citizenQuery.trim()) return;
-    const tmr = setTimeout(() => {
-      api
-        .searchPatients(citizenQuery.trim())
-        .then(setAllCitizens)
-        .catch(() => {});
-    }, 180);
-    return () => clearTimeout(tmr);
-  }, [citizenQuery]);
+  const syncQueue = useCallback(async () => {
+    if (me && me.role !== "DOCTOR" && me.role !== "ADMIN") return;
+    try {
+      const q = await api.getQueue();
+      setQueueTickets(q);
+      const activeInConsult = q.find((x) => x.status === "in-consultation");
+      const unsavedWork = meds.length > 0 || dxEn.trim().length > 0 || dxAr.trim().length > 0;
+      if (activeInConsult && activeInConsult.id !== visitId && (!patient || !unsavedWork)) {
+        setVisitId(activeInConsult.id);
+        await selectCitizenById(patientId(activeInConsult.patient));
+      }
+    } catch {
+      // ignore background poll failures
+    }
+  }, [me, visitId, patient, meds.length, dxEn, dxAr, selectCitizenById]);
+  useAutoRefresh(syncQueue, 8_000);
 
   // Real-time Allergy & Drug-Drug Interaction (DDI) safety engine
   const safetyWarnings: string[] = [];
@@ -220,6 +274,7 @@ export default function ConsultationPage() {
   async function orderLabTest() {
     if (!patient) return;
     const pid = patientId(patient);
+    const chosenLab = labsList.find((l) => l.id === targetLabId);
     setBusy(true);
     try {
       await api.orderLabSample({
@@ -229,8 +284,14 @@ export default function ConsultationPage() {
         sampleTypeEn: "Venous Blood",
         sampleTypeAr: "عينة دم وريدي",
         priority: "URGENT",
+        targetLabUserId: targetLabId || undefined,
       });
-      push("success", ar ? "تم إرسال طلب التحليل للمعمل المركزي فوراً" : "Lab sample order sent to Central Lab");
+      push(
+        "success",
+        ar
+          ? `تم إرسال طلب التحليل إلى (${chosenLab?.nameAr || "المعمل المركزي"}) فوراً`
+          : `Lab sample order sent to ${chosenLab?.nameEn || "Central Lab"}`
+      );
       await loadPatientHistory(pid);
     } catch (e) {
       handleError(e);
@@ -241,19 +302,23 @@ export default function ConsultationPage() {
 
   async function createReferral() {
     if (!patient) return;
+    const chosenHospital = hospitalsList.find((h) => h.id === targetHospitalId);
+    const chosenLab = labsList.find((l) => l.id === targetLabId);
     setBusy(true);
     try {
       await api.createReferral({
         patientId: patientId(patient),
         targetType: refTarget,
         urgency: refUrgency,
+        departmentEn: refTarget === "HOSPITAL" ? chosenHospital?.nameEn : refTarget === "LAB" ? chosenLab?.nameEn : undefined,
+        departmentAr: refTarget === "HOSPITAL" ? chosenHospital?.nameAr : refTarget === "LAB" ? chosenLab?.nameAr : undefined,
         clinicalNoteEn: refReason,
         clinicalNoteAr: refReason,
       });
       push(
         "success",
         ar ? "تم الإرسال" : "Sent",
-        ar ? "تم إنشاء الإحالة الطبية وتوجيهها تلقائياً" : "Referral created and routed"
+        ar ? "تم إنشاء الإحالة الطبية وتوجيهها تلقائياً للمنشأة المحددة" : "Referral created and routed to selected facility"
       );
       setRefReason("");
     } catch (e) {
@@ -289,6 +354,10 @@ export default function ConsultationPage() {
         })),
       });
       setSignedCode(rx.id.slice(0, 8).toUpperCase());
+      if (visitId) {
+        const vitalsSummary = `BP ${vitals.bp}, HR ${vitals.hr}, Temp ${vitals.temp}C, SpO2 ${vitals.spo2}%, Glu ${vitals.glucose}`;
+        await api.setVisitStatus(visitId, "completed", vitalsSummary).catch(() => undefined);
+      }
       push(
         "success",
         ar
@@ -296,11 +365,82 @@ export default function ConsultationPage() {
           : "Prescription signed, sent to pharmacy, and chronic quotas updated"
       );
       await loadPatientHistory(pid);
+      const latestQ = await api.getQueue().catch(() => queueTickets);
+      setQueueTickets(latestQ);
     } catch (e) {
       handleError(e);
     } finally {
       setBusy(false);
     }
+  }
+
+  async function completeConsultationVisit() {
+    if (!visitId) return;
+    setBusy(true);
+    try {
+      const vitalsSummary = `BP ${vitals.bp}, HR ${vitals.hr}, Temp ${vitals.temp}C, SpO2 ${vitals.spo2}%, Glu ${vitals.glucose}`;
+      await api.setVisitStatus(visitId, "completed", vitalsSummary);
+      push(
+        "success",
+        ar ? "تم حفظ العلامات الحيوية وإنهاء جلسة الكشف وإغلاق التذكرة" : "Vitals saved & consultation session completed"
+      );
+      setVisitId(null);
+      setPatient(null);
+      setMeds([]);
+      setSignedCode(null);
+      const latestQ = await api.getQueue().catch(() => []);
+      setQueueTickets(latestQ);
+    } catch (e) {
+      handleError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRedeemShareCode() {
+    const clean = shareCode.trim().toUpperCase();
+    if (clean.length !== 10) return;
+    setRedeemingShare(true);
+    try {
+      const res = await api.redeemShare(clean);
+      setPatient(res.patient);
+      setShareCode("");
+      await loadPatientHistory(patientId(res.patient));
+      push(
+        "success",
+        ar
+          ? `تم فك كود المشاركة (${clean}) واستدعاء سجل المواطن الكامل بنجاح`
+          : `Share code (${clean}) redeemed and citizen medical record loaded`
+      );
+    } catch (e) {
+      handleError(e);
+    } finally {
+      setRedeemingShare(false);
+    }
+  }
+
+  if (me && me.role !== "DOCTOR" && me.role !== "ADMIN") {
+    return (
+      <Card className="p-8 text-center max-w-xl mx-auto my-8 border-error/30 bg-error-container/15">
+        <AlertTriangle className="h-10 w-10 text-error mx-auto mb-3" />
+        <h2 className="text-lg font-bold text-primary">
+          {ar ? "غرفة الكشف والملف الطبي مخصصة للطبيب المعالج فقط" : "Consultation & Medical Records — Physician Only"}
+        </h2>
+        <p className="text-sm text-on-surface-variant mt-2 leading-relaxed">
+          {ar
+            ? "صلاحية الموظف المساعد للطبيب تقتصر على تأكيد الحجوزات وتنظيم طابور دخول الحالات دون الدخول إلى السجلات الإكلينيكية أو تحرير الروشتات."
+            : "Clinic Assistants manage appointment confirmation and queue flow only and cannot access clinical consultations or prescribe medications."}
+        </p>
+        <div className="mt-5 flex justify-center gap-2">
+          <Button onClick={() => router.replace("/doctor/appointments")}>
+            {ar ? "العودة لحجوزات العيادة" : "Back to Clinic Appointments"}
+          </Button>
+          <Button variant="outline" onClick={() => router.replace("/doctor/queue")}>
+            {ar ? "طابور العيادة" : "Clinic Queue"}
+          </Button>
+        </div>
+      </Card>
+    );
   }
 
   if (loading) return <p className="p-10 text-center text-sm text-on-surface-variant">{t("common.loading")}</p>;
@@ -309,13 +449,13 @@ export default function ConsultationPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Top Patient Switcher & Universal Search Bar (Queue + National Registry) */}
+      {/* Scoped Clinic Queue Selector & Citizen Share Code Access */}
       <Card className="p-4 border-primary/20 bg-surface-container-lowest">
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           <div>
             <label className="mb-1 block text-xs font-bold text-primary">
               <UserCheck className="inline h-3.5 w-3.5 me-1" />
-              {ar ? "مرضى الطابور الحالي بالعيادة:" : "Current Clinic Queue Patients:"}
+              {ar ? "مرضى طابور عيادتك الحاليين (بعد تسجيل حضورهم لدى المساعد):" : "Current Clinic Queue Patients (Checked-In):"}
             </label>
             <select
               value={visitId ?? ""}
@@ -328,7 +468,7 @@ export default function ConsultationPage() {
               className={input}
             >
               <option value="">
-                {ar ? "— اختر من طابور العيادة أو ابحث بالرقم القومي / MTI بالجهة المقابلة —" : "— Select from Clinic Queue or search by National ID / MTI —"}
+                {ar ? "— اختر مريضاً من طابور عيادتك —" : "— Select from your clinic queue —"}
               </option>
               {queueTickets
                 .filter((x) => x.status === "in-consultation" || x.status === "waiting")
@@ -342,38 +482,48 @@ export default function ConsultationPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-bold text-secondary">
-              {ar
-                ? "أو استدعاء أي مواطن فوراً بالرقم القومي (14 رقم) أو الكود الوطني (MTI) أو الاسم:"
-                : "Or lookup any citizen by 14-digit National ID, MTI, or Name:"}
+            <label className="mb-1 block text-xs font-bold text-tertiary">
+              <ShieldCheck className="inline h-3.5 w-3.5 me-1" />
+              {ar ? "أو استدعاء ملف مواطن بكود المشاركة المؤقت (من تطبيق الموبايل):" : "Or Redeem 10-Char Citizen App Share Code:"}
             </label>
-            <div className="flex gap-2">
-              <SearchInput
-                value={citizenQuery}
-                onChange={setCitizenQuery}
-                placeholder={ar ? "اكتب الرقم القومي أو كود MTI أو الاسم..." : "Type National ID, MTI, or Name..."}
-                className="flex-1"
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                value={shareCode}
+                onChange={(e) => setShareCode(e.target.value.toUpperCase().slice(0, 10))}
+                dir="ltr"
+                maxLength={10}
+                placeholder="A1B2C3D4E5"
+                className="h-10 flex-1 min-w-[160px] rounded-lg border border-outline-variant/40 bg-surface-container-low px-3 font-mono text-xs font-bold uppercase tracking-widest outline-none focus:border-primary"
               />
-              <select
-                value={patient ? patientId(patient) : ""}
-                onChange={(e) => {
-                  if (e.target.value) void selectCitizenById(e.target.value);
-                }}
-                className="h-10 max-w-[230px] rounded-lg bg-surface-container-low px-2.5 text-xs font-semibold outline-none"
+              <Button
+                size="sm"
+                variant="outline"
+                loading={redeemingShare}
+                disabled={shareCode.trim().length !== 10}
+                onClick={() => void handleRedeemShareCode()}
               >
-                {allCitizens.map((c) => {
-                  const cid = patientId(c);
-                  return (
-                    <option key={cid} value={cid}>
-                      {pick(c.fullName, locale)} ({c.mti})
-                    </option>
-                  );
-                })}
-              </select>
+                {ar ? "فك الكود واستدعاء السجل" : "Redeem & Load Record"}
+              </Button>
             </div>
           </div>
         </div>
       </Card>
+
+      {!patient && (
+        <Card className="p-8 text-center border-primary/20 bg-surface-container-lowest space-y-3">
+          <Stethoscope className="h-10 w-10 text-primary mx-auto opacity-80" />
+          <h2 className="text-base font-bold text-primary">
+            {ar
+              ? "غرفة الكشف جاهزة — بانتظار إدخال المريض من الموظف المساعد"
+              : "Consultation Room Ready — Waiting for Clinic Assistant to Admit Patient"}
+          </h2>
+          <p className="text-xs text-on-surface-variant max-w-lg mx-auto leading-relaxed">
+            {ar
+              ? `عدد الحالات المنتظرة في طابور عيادتك حالياً: (${queueTickets.filter((x) => x.status === "waiting").length}). عند قيام الموظف المساعد بإدخال الحالة، سيظهر ملف المواطن تلقائياً هنا، أو يمكنك اختيار المريض أعلاه.`
+              : `Currently waiting in your clinic queue: (${queueTickets.filter((x) => x.status === "waiting").length}). The patient's medical record opens automatically once admitted by your clinic assistant, or select manually above.`}
+          </p>
+        </Card>
+      )}
 
       {patient && (
         <Card className="p-5">
@@ -395,6 +545,17 @@ export default function ConsultationPage() {
                     <Badge tone="success" icon={<BadgeCheck className="h-3 w-3" />}>
                       {ar ? "تأمين صحي سارٍ" : "Active insurance"}
                     </Badge>
+                  )}
+                  {visitId && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+                      loading={busy}
+                      onClick={() => void completeConsultationVisit()}
+                    >
+                      {ar ? "حفظ العلامات الحيوية وإنهاء الكشف" : "Save Vitals & Complete Visit"}
+                    </Button>
                   )}
                 </div>
                 <div className="mt-1 flex flex-wrap gap-x-4 text-xs text-on-surface-variant font-mono">
@@ -438,9 +599,113 @@ export default function ConsultationPage() {
         </Card>
       )}
 
+      {/* Clinical AI Copilot & Live Vitals Tracker */}
+      {patient && (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <Card className="border-primary/25 bg-primary/5">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-xs text-primary">
+                <Sparkles className="h-4 w-4 text-secondary" />
+                {ar ? "المساعد الإكلينيكي الذكي (Clinical AI Copilot)" : "Clinical AI Copilot"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2.5 text-xs">
+              <div className="space-y-1">
+                {patientLabHistory.some((s) => s.results?.some((r) => r.flag !== "normal")) ? (
+                  <p className="rounded-lg bg-error-container/70 px-2.5 py-1.5 font-semibold text-on-error-container">
+                    {ar
+                      ? "رصد تحاليل معملية غير طبيعية — يُوصى بمراجعة القيم الحرجة أعلاه قبل تحرير الدواء."
+                      : "Abnormal lab findings detected — review elevated/critical analytes prior to prescribing."}
+                  </p>
+                ) : (
+                  <p className="rounded-lg bg-surface-container-lowest px-2.5 py-1.5 text-on-surface-variant">
+                    {ar
+                      ? "ملخص إكلينيكي فوري: جميع التحاليل المسجلة ضمن النطاق الطبيعي أو بانتظار الاعتماد."
+                      : "Clinical summary: All recorded lab analytes are within normal range or pending verification."}
+                  </p>
+                )}
+                {patient.allergies.length > 0 && (
+                  <p className="rounded-lg bg-amber-500/10 px-2.5 py-1.5 font-semibold text-amber-800 dark:text-amber-300">
+                    {ar
+                      ? `تنبيه حساسية نشط: تجنب وصف أي بدائل تحتوي على (${patient.allergies.map((a) => pick(a, locale)).join("، ")}).`
+                      : `Active Allergy Guard: Avoid prescribing agents cross-reacting with (${patient.allergies.map((a) => pick(a, locale)).join(", ")}).`}
+                  </p>
+                )}
+              </div>
+              <div>
+                <p className="mb-1.5 text-[11px] font-bold text-on-surface-variant">
+                  {ar ? "إدراج سريع للتشخيص المرمز (ICD-10):" : "1-Click ICD-10 Diagnosis Presets:"}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { code: "I10", en: "Essential hypertension", ar: "ارتفاع ضغط الدم الأساسي", chronic: true },
+                    { code: "E11.9", en: "Type 2 diabetes mellitus", ar: "السكري من النوع الثاني", chronic: true },
+                    { code: "I25.1", en: "Coronary artery disease", ar: "قصور الشريان التاجي", chronic: true },
+                    { code: "J06.9", en: "Acute upper respiratory infection", ar: "التهاب حاد بالجهاز التنفسي العلوي", chronic: false },
+                    { code: "D50.9", en: "Iron deficiency anemia", ar: "أنيميا نقص الحديد", chronic: false },
+                  ].map((item) => (
+                    <button
+                      key={item.code}
+                      type="button"
+                      onClick={() => {
+                        setIcd(item.code);
+                        setDxEn(item.en);
+                        setDxAr(item.ar);
+                        setIsChronicRx(item.chronic);
+                      }}
+                      className="rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-2 py-1 text-[11px] font-semibold hover:border-primary hover:bg-primary/10 transition"
+                    >
+                      <span className="font-mono text-primary">{item.code}</span> — {ar ? item.ar : item.en}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between text-xs w-full">
+                <span className="flex items-center gap-2">
+                  <Activity className="h-4 w-4 text-tertiary" />
+                  {ar ? "العلامات الحيوية أثناء الكشف (Clinical Vitals)" : "Consultation Vitals Tracker"}
+                </span>
+                <Badge tone={Number(vitals.spo2) < 94 || Number(vitals.temp) >= 38 ? "error" : "success"}>
+                  {Number(vitals.spo2) < 94 || Number(vitals.temp) >= 38
+                    ? ar ? "مؤشر غير مستقر" : "Vital Alert"
+                    : ar ? "مؤشرات مستقرة" : "Vitals Stable"}
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 gap-2.5 sm:grid-cols-5 text-xs">
+              <div>
+                <label className="block text-[10px] font-bold text-on-surface-variant mb-1">{ar ? "الضغط BP" : "BP (mmHg)"}</label>
+                <input className={input} dir="ltr" value={vitals.bp} onChange={(e) => setVitals({ ...vitals, bp: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-on-surface-variant mb-1">{ar ? "النبض HR" : "HR (bpm)"}</label>
+                <input className={input} dir="ltr" value={vitals.hr} onChange={(e) => setVitals({ ...vitals, hr: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-on-surface-variant mb-1">{ar ? "الحرارة Temp" : "Temp (°C)"}</label>
+                <input className={input} dir="ltr" value={vitals.temp} onChange={(e) => setVitals({ ...vitals, temp: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-on-surface-variant mb-1">{ar ? "الأكسجين SpO2" : "SpO2 (%)"}</label>
+                <input className={input} dir="ltr" value={vitals.spo2} onChange={(e) => setVitals({ ...vitals, spo2: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-on-surface-variant mb-1">{ar ? "السكر Glucose" : "Glucose"}</label>
+                <input className={input} dir="ltr" value={vitals.glucose} onChange={(e) => setVitals({ ...vitals, glucose: e.target.value })} />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Live Unified Patient Record across Sectors (Pharmacy + Lab + Radiology) */}
       {patient && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-1.5 text-xs">
@@ -471,9 +736,19 @@ export default function ConsultationPage() {
               ) : (
                 patientRxHistory.slice(0, 4).map((rx) => (
                   <div key={rx.id} className="rounded-lg border border-outline-variant/40 p-2 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-on-surface">{pick(rx.diagnosis, locale)}</span>
-                      <Badge tone={rx.status === "dispensed" ? "success" : "warning"}>{rxCode(rx)}</Badge>
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="font-bold text-on-surface truncate">{pick(rx.diagnosis, locale)}</span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Badge tone={rx.status === "dispensed" ? "success" : "warning"}>{rxCode(rx)}</Badge>
+                        <button
+                          type="button"
+                          onClick={() => setPrintRx(rx)}
+                          title={ar ? "طباعة الروشتة الرسمية بـ QR" : "Print Official QR Rx"}
+                          className="rounded p-1 text-primary hover:bg-primary/10"
+                        >
+                          <Printer className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
                     <p className="text-[11px] text-on-surface-variant mt-0.5">
                       {rx.medications.map((m) => pick(m.name, locale)).join("، ")} • {formatDate(rx.createdAt, locale)}
@@ -549,6 +824,53 @@ export default function ConsultationPage() {
                     <p className="text-[11px] text-on-surface-variant mt-0.5">
                       {ar ? rad.findingsAr : rad.findingsEn}
                     </p>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-1.5 text-xs">
+                <FileText className="h-4 w-4 text-secondary" />
+                {ar ? `وثائق المواطن المرفوعة (${patientDocs.length})` : `Citizen Documents (${patientDocs.length})`}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2 max-h-48 overflow-y-auto">
+              {patientDocs.length === 0 ? (
+                <p className="text-xs text-on-surface-variant py-3 text-center">
+                  {ar ? "لا توجد وثائق مرفوعة من تطبيق المواطن" : "No uploaded citizen documents"}
+                </p>
+              ) : (
+                patientDocs.map((doc) => (
+                  <div key={doc.id} className="rounded-lg border border-outline-variant/40 p-2 text-xs space-y-1.5">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="font-bold text-on-surface truncate">{doc.label}</span>
+                      <Badge tone={doc.status === "REVIEWED" ? "success" : "warning"}>
+                        {doc.status === "REVIEWED" ? (ar ? "معتمد" : "Reviewed") : (ar ? "قيد المراجعة" : "Pending")}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => void openDocumentPreview(doc)}
+                        className="inline-flex items-center gap-1 rounded bg-surface-container px-2 py-0.5 text-[11px] font-semibold hover:bg-surface-container-high"
+                      >
+                        <Eye className="h-3 w-3" />
+                        {ar ? "معاينة" : "Preview"}
+                      </button>
+                      {doc.status === "PENDING_REVIEW" && (
+                        <button
+                          type="button"
+                          onClick={() => void approveDocument(doc.id)}
+                          className="inline-flex items-center gap-1 rounded bg-emerald-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:opacity-90"
+                        >
+                          <CheckCircle2 className="h-3 w-3" />
+                          {ar ? "اعتماد طبي" : "Approve"}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))
               )}
@@ -712,8 +1034,17 @@ export default function ConsultationPage() {
               <option value="Lipid Profile">Lipid Profile — دهون الدم</option>
               <option value="Cardiac Troponin-I (STAT)">Cardiac Troponin-I (STAT) — إنزيمات قلب طارئة</option>
             </select>
+            {labsList.length > 0 && (
+              <select className={input} value={targetLabId} onChange={(e) => setTargetLabId(e.target.value)}>
+                {labsList.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {ar ? `المعمل: ${l.nameAr}` : `Lab: ${l.nameEn}`}
+                  </option>
+                ))}
+              </select>
+            )}
             <Button variant="outline" onClick={orderLabTest} disabled={busy || !patient}>
-              {ar ? "إرسال العينة لقائمة انتظار المعمل" : "Send Order to Lab Intake Queue"}
+              {ar ? "إرسال العينة لقائمة انتظار المعمل المحدد" : "Send Order to Selected Lab Queue"}
             </Button>
           </CardContent>
         </Card>
@@ -737,6 +1068,24 @@ export default function ConsultationPage() {
                 <option value="CRITICAL">{ar ? "طوارئ حرجة (Critical)" : "Critical"}</option>
               </select>
             </div>
+            {refTarget === "HOSPITAL" && hospitalsList.length > 0 && (
+              <select className={input} value={targetHospitalId} onChange={(e) => setTargetHospitalId(e.target.value)}>
+                {hospitalsList.map((h) => (
+                  <option key={h.id} value={h.id}>
+                    {ar ? `المستشفى: ${h.nameAr}` : `Hospital: ${h.nameEn}`}
+                  </option>
+                ))}
+              </select>
+            )}
+            {refTarget === "LAB" && labsList.length > 0 && (
+              <select className={input} value={targetLabId} onChange={(e) => setTargetLabId(e.target.value)}>
+                {labsList.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {ar ? `المعمل: ${l.nameAr}` : `Lab: ${l.nameEn}`}
+                  </option>
+                ))}
+              </select>
+            )}
             <input
               className={input}
               placeholder={ar ? "سبب الإحالة والملاحظات الإكلينيكية" : "Reason for referral"}
@@ -844,6 +1193,52 @@ export default function ConsultationPage() {
           </Card>
         </div>
       )}
+
+      <Modal
+        open={!!previewDoc}
+        onClose={() => setPreviewDoc(null)}
+        title={previewDoc?.label ?? ""}
+      >
+        {previewDoc && (
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between text-xs text-on-surface-variant">
+              <span>{previewDoc.mimeType}</span>
+              <Badge tone={previewDoc.status === "REVIEWED" ? "success" : "warning"}>
+                {previewDoc.status}
+              </Badge>
+            </div>
+            {previewDoc.fileBase64 && previewDoc.mimeType.startsWith("image/") ? (
+              <img
+                src={`data:${previewDoc.mimeType};base64,${previewDoc.fileBase64}`}
+                alt={previewDoc.label}
+                className="max-h-96 w-full rounded-lg border border-outline-variant/40 object-contain bg-surface-container-low"
+              />
+            ) : previewDoc.fileBase64 && previewDoc.mimeType === "application/pdf" ? (
+              <iframe
+                src={`data:application/pdf;base64,${previewDoc.fileBase64}`}
+                title={previewDoc.label}
+                className="h-96 w-full rounded-lg border border-outline-variant/40"
+              />
+            ) : (
+              <p className="py-6 text-center text-xs text-on-surface-variant">
+                {ar ? "لا يمكن عرض هذا النوع من الملفات" : "Unsupported preview format"}
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setPreviewDoc(null)}>
+                {ar ? "إغلاق" : "Close"}
+              </Button>
+              {previewDoc.status === "PENDING_REVIEW" && (
+                <Button icon={<CheckCircle2 className="h-4 w-4" />} onClick={() => void approveDocument(previewDoc.id)}>
+                  {ar ? "اعتماد وإرفاق بالسجل الإكلينيكي" : "Approve & Attach to Clinical Record"}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <OfficialPrintModal rx={printRx} onClose={() => setPrintRx(null)} />
     </div>
   );
 }

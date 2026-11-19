@@ -49,8 +49,8 @@ function SearchResults() {
         meta={
           <span className="text-xs font-semibold text-on-surface-variant">
             {ar
-              ? "بحث فوري عبر الفهرس الأعمى المشفر (HMAC-SHA256 Blind Index) بالرقم القومي أو MTI أو الاسم"
-              : "Instant O(1) lookup via HMAC-SHA256 Blind Index by National ID, MTI, or Name"}
+              ? "بحث فوري موحّد في السجل الطبي الوطني بالرقم القومي أو كود MTI أو الاسم"
+              : "Instant unified national registry lookup by National ID, MTI code, or Name"}
           </span>
         }
       />

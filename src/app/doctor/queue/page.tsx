@@ -17,7 +17,10 @@ import {
   ShieldCheck,
   Plus,
   Stethoscope,
+  RefreshCw,
 } from "lucide-react";
+import { useAuth } from "@/lib/auth/AuthProvider";
+import { useAutoRefresh } from "@/lib/hooks/useAutoRefresh";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { useToast } from "@/lib/toast/ToastProvider";
 import { useApiError } from "@/lib/api/useApiError";
@@ -49,9 +52,15 @@ const STATUS_LABEL: Record<QueueTicket["status"], { en: string; ar: string }> = 
 export default function DoctorQueuePage() {
   const { locale, t, dir } = useLocale();
   const { push } = useToast();
+  const { user: me } = useAuth();
   const handleError = useApiError();
   const router = useRouter();
   const [tickets, setTickets] = useState<QueueTicket[]>([]);
+  const [doctors, setDoctors] = useState<{ id: string; fullNameEn: string; fullNameAr: string; specialityEn?: string; specialityAr?: string; facilityEn?: string; facilityAr?: string }[]>([]);
+  const [queueScope, setQueueScope] = useState<"all" | "mine">("all");
+  const [selectedFilterDoctorId, setSelectedFilterDoctorId] = useState<string>("ALL");
+  const isGlobalAdmin = me?.role === "ADMIN" || me?.role === "EXECUTIVE";
+  const isClinicalDoctor = !me || me.role === "DOCTOR" || me.role === "ADMIN";
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState("");
@@ -61,6 +70,7 @@ export default function DoctorQueuePage() {
   const [citizenSearch, setCitizenSearch] = useState("");
   const [citizenResults, setCitizenResults] = useState<NationalIdentity[]>([]);
   const [selectedCitizen, setSelectedCitizen] = useState<NationalIdentity | null>(null);
+  const [selectedDoctorId, setSelectedDoctorId] = useState("");
   const [reasonAr, setReasonAr] = useState("كشف باطنة وقلب شامل ومتابعة دورية");
   const [reasonEn, setReasonEn] = useState("Comprehensive Internal Medicine & Cardiology Checkup");
   const [isEmergency, setIsEmergency] = useState(false);
@@ -70,7 +80,9 @@ export default function DoctorQueuePage() {
 
   const load = useCallback(async () => {
     try {
-      setTickets(await api.getQueue());
+      const [qList, docs] = await Promise.all([api.getQueue(), api.getDoctors().catch(() => [])]);
+      setTickets(qList);
+      setDoctors(docs);
     } catch (e) {
       handleError(e);
     } finally {
@@ -80,6 +92,7 @@ export default function DoctorQueuePage() {
   useEffect(() => {
     void load();
   }, [load]);
+  useAutoRefresh(load, 12_000);
 
   useEffect(() => {
     if (!addModalOpen) return;
@@ -93,19 +106,28 @@ export default function DoctorQueuePage() {
   }, [addModalOpen, citizenSearch, selectedCitizen]);
 
   const filtered = useMemo(() => {
-    return tickets.filter((tk) =>
-      matchesPatientQuery(tk.patient, query, tk.ticketNo, tk.reason.ar, tk.reason.en)
-    );
-  }, [tickets, query]);
+    return tickets
+      .filter((tk) => queueScope === "all" || !tk.doctorId || tk.doctorId === me?.id)
+      .filter((tk) => selectedFilterDoctorId === "ALL" || tk.doctorId === selectedFilterDoctorId)
+      .filter((tk) =>
+        matchesPatientQuery(tk.patient, query, tk.ticketNo, tk.reason.ar, tk.reason.en)
+      );
+  }, [tickets, query, queueScope, selectedFilterDoctorId, me?.id]);
 
   async function callNext() {
     setBusy(true);
     try {
-      const called = await api.callNext();
+      const targetDoc =
+        selectedFilterDoctorId !== "ALL"
+          ? selectedFilterDoctorId
+          : me?.role === "DOCTOR"
+            ? me.id
+            : undefined;
+      const called = await api.callNext(targetDoc);
       push(
         "success",
         ar
-          ? `تمت مناداة ${pick(called.patient.fullName, locale)}`
+          ? `تمت مناداة ${pick(called.patient.fullName, locale)} وإدخاله للطبيب`
           : `${pick(called.patient.fullName, locale)} has been called`,
         called.ticketNo
       );
@@ -136,6 +158,17 @@ export default function DoctorQueuePage() {
       if (ticket.status === "waiting") {
         await api.setVisitStatus(ticket.id, "in-consultation");
       }
+      if (!isClinicalDoctor) {
+        push(
+          "success",
+          ar
+            ? `تم توجيه ${pick(ticket.patient.fullName, locale)} للدخول لغرفة كشف الطبيب`
+            : `${pick(ticket.patient.fullName, locale)} admitted to physician's room`
+        );
+        setSelected(null);
+        await load();
+        return;
+      }
       const pid = patientId(ticket.patient);
       setSelected(null);
       router.push(`/doctor/consultation?patientId=${encodeURIComponent(pid)}&visitId=${encodeURIComponent(ticket.id)}`);
@@ -156,6 +189,7 @@ export default function DoctorQueuePage() {
         reasonEn: reasonEn.trim() || reasonAr.trim(),
         reasonAr: reasonAr.trim() || reasonEn.trim(),
         isEmergency,
+        doctorId: selectedDoctorId || undefined,
       });
       push("success", ar ? "تم إدراج المواطن في قائمة انتظار العيادة بنجاح" : "Citizen added to clinic queue");
       setAddModalOpen(false);
@@ -192,6 +226,13 @@ export default function DoctorQueuePage() {
         }
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              {ar ? "مزامنة حية (12 ث)" : "Live Sync (12s)"}
+            </span>
+            <Button variant="outline" size="sm" icon={<RefreshCw className="h-4 w-4" />} onClick={load}>
+              {ar ? "تحديث" : "Refresh"}
+            </Button>
             <Button
               variant="outline"
               icon={<Plus className="h-4 w-4" />}
@@ -224,8 +265,42 @@ export default function DoctorQueuePage() {
       </div>
 
       <Card>
-        <CardHeader className="flex-col items-stretch gap-3 sm:flex-row sm:items-center">
-          <CardTitle>{ar ? "الطابور الموحد للعيادة" : "Clinic Queue"}</CardTitle>
+        <CardHeader className="flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <CardTitle>{ar ? "الطابور الموحد للعيادة" : "Clinic Queue"}</CardTitle>
+            {isGlobalAdmin && (
+              <>
+                <div className="inline-flex rounded-lg border border-outline-variant/40 bg-surface-container-low p-0.5 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setQueueScope("all")}
+                    className={`rounded-md px-2.5 py-1 font-semibold transition ${queueScope === "all" ? "bg-primary text-on-primary" : "text-on-surface-variant hover:text-on-surface"}`}
+                  >
+                    {ar ? "الطابور العام بالكامل" : "All Clinics"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQueueScope("mine")}
+                    className={`rounded-md px-2.5 py-1 font-semibold transition ${queueScope === "mine" ? "bg-primary text-on-primary" : "text-on-surface-variant hover:text-on-surface"}`}
+                  >
+                    {ar ? "عيادتي فقط" : "My Clinic Queue"}
+                  </button>
+                </div>
+                <select
+                  value={selectedFilterDoctorId}
+                  onChange={(e) => setSelectedFilterDoctorId(e.target.value)}
+                  className="h-8 rounded-lg border border-outline-variant/40 bg-surface-container-low px-2 text-xs font-semibold outline-none"
+                >
+                  <option value="ALL">{ar ? "كل عيادات وأطباء الجمهورية" : "All Nationwide Doctors"}</option>
+                  {doctors.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {ar ? d.fullNameAr : d.fullNameEn}{d.facilityAr || d.facilityEn ? ` — ${ar ? (d.facilityAr ?? d.facilityEn) : (d.facilityEn ?? d.facilityAr)}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+          </div>
           <SearchInput
             value={query}
             onChange={setQuery}
@@ -286,6 +361,11 @@ export default function DoctorQueuePage() {
                 </div>
                 <p className="mt-0.5 truncate text-xs text-on-surface-variant">
                   {pick(ticket.reason, locale)}
+                  {ticket.doctorName && (
+                    <span className="ms-2 font-semibold text-secondary">
+                      • {ar ? "الطبيب:" : "Dr."} {pick(ticket.doctorName, locale)}
+                    </span>
+                  )}
                 </p>
               </div>
               <div className="hidden shrink-0 items-center gap-2 sm:flex">
@@ -298,7 +378,9 @@ export default function DoctorQueuePage() {
                     void startConsultationForTicket(ticket);
                   }}
                 >
-                  {ar ? "بدء الكشف" : "Consult"}
+                  {isClinicalDoctor
+                    ? (ar ? "بدء الكشف" : "Consult")
+                    : (ar ? "إدخال للطبيب" : "Admit to Doctor")}
                 </Button>
                 <div className="flex flex-col items-end gap-1">
                   <Badge tone={STATUS_TONE[ticket.status]}>
@@ -333,9 +415,11 @@ export default function DoctorQueuePage() {
                   className="rounded-xl object-cover"
                   unoptimized
                 />
-                <span className="absolute -bottom-1 -end-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-on-primary">
-                  {selected.patient.bloodType}
-                </span>
+                {isClinicalDoctor && (
+                  <span className="absolute -bottom-1 -end-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-on-primary">
+                    {selected.patient.bloodType}
+                  </span>
+                )}
               </div>
               <div className="space-y-0.5">
                 <p className="text-sm font-bold font-mono text-primary">MTI: {selected.patient.mti}</p>
@@ -356,7 +440,7 @@ export default function DoctorQueuePage() {
                 {ar ? "التذكرة" : "Ticket"}: {selected.ticketNo}
               </p>
             </div>
-            {selected.patient.allergies.length > 0 && (
+            {isClinicalDoctor && selected.patient.allergies.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {selected.patient.allergies.map((a, i) => (
                   <Badge key={i} tone="error">
@@ -371,7 +455,9 @@ export default function DoctorQueuePage() {
               icon={<Stethoscope className="h-4 w-4" />}
               onClick={() => startConsultationForTicket(selected)}
             >
-              {ar ? "بدء الكشف وفتح غرفة الكشف الطبي" : "Start Consultation & Open Clinical File"}
+              {isClinicalDoctor
+                ? (ar ? "بدء الكشف وفتح غرفة الكشف الطبي" : "Start Consultation & Open Clinical File")
+                : (ar ? "إدخال الحالة لغرفة كشف الطبيب الآن" : "Admit Patient to Physician Room")}
             </Button>
             <div className="grid grid-cols-2 gap-2">
               <Button
@@ -428,11 +514,28 @@ export default function DoctorQueuePage() {
                       MTI: {p.mti} {p.nationalId ? `• NID: ${p.nationalId}` : ""}
                     </p>
                   </div>
-                  <Badge tone="secondary">{p.bloodType}</Badge>
+                  {isClinicalDoctor && <Badge tone="secondary">{p.bloodType}</Badge>}
                 </button>
               );
             })}
           </div>
+          {isGlobalAdmin && (
+            <select
+              className="h-10 w-full rounded-lg bg-surface-container-low px-3 text-sm outline-none"
+              value={selectedDoctorId}
+              onChange={(e) => setSelectedDoctorId(e.target.value)}
+            >
+              <option value="">
+                {ar ? "— طابور العيادة العام (أي طبيب متاح) —" : "— General Clinic Queue (Any Available Physician) —"}
+              </option>
+              {doctors.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {ar ? d.fullNameAr : d.fullNameEn}
+                  {d.specialityAr || d.specialityEn ? ` — ${ar ? (d.specialityAr ?? d.specialityEn) : (d.specialityEn ?? d.specialityAr)}` : ""}
+                </option>
+              ))}
+            </select>
+          )}
           <input
             className="h-10 w-full rounded-lg bg-surface-container-low px-3 text-sm outline-none"
             value={reasonAr}

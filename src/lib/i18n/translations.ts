@@ -73,12 +73,13 @@ export const dictionaries = {
     },
     nav: {
       doctor: {
-        queue: "Clinic Queue & Patients",
+        queue: "Clinic Queue & Entry",
         consultation: "Consultation & E-Rx",
+        appointments: "Clinic Appointments (Assistant)",
         ePrescriptions: "E-Prescriptions Log",
         labOrders: "Lab & Radiology Orders",
         referrals: "Reports & Referrals",
-        schedule: "Schedule & Operations",
+        schedule: "My Availability Schedule",
         renewals: "Renewal Requests",
         sharedRecord: "Shared Patient Record",
       },
@@ -91,6 +92,7 @@ export const dictionaries = {
         financialSettlement: "Financial Settlement",
       },
       lab: {
+        appointments: "Lab Bookings & Reception",
         sampleIntake: "Sample Intake Queue",
         resultsEntry: "Results Entry & Verification",
         radiology: "Radiology / DICOM Viewer",
@@ -191,12 +193,13 @@ export const dictionaries = {
     },
     nav: {
       doctor: {
-        queue: "لوحة العيادة والمرضى",
-        consultation: "كشف ومناظرة المريض",
+        queue: "طابور العيادة وإدخال الحالات",
+        consultation: "غرفة الكشف والملف الطبي",
+        appointments: "حجوزات العيادة (مساعد الطبيب)",
         ePrescriptions: "سجل الروشتات الإلكترونية",
         labOrders: "طلبات التحاليل والأشعة",
         referrals: "التقارير والإحالات الطبية",
-        schedule: "جدول المواعيد والعمليات",
+        schedule: "جدول مواعيد الطبيب المتاحة",
         renewals: "طلبات تجديد الروشتات",
         sharedRecord: "الملف المشارَك من المريض",
       },
@@ -209,6 +212,7 @@ export const dictionaries = {
         financialSettlement: "التسوية المالية",
       },
       lab: {
+        appointments: "حجوزات واستقبال المعمل",
         sampleIntake: "قائمة استلام العينات",
         resultsEntry: "إدخال واعتماد النتائج",
         radiology: "عارض الأشعة (DICOM)",

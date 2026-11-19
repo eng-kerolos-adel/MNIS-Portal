@@ -3,19 +3,25 @@ import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
+import { useAuth } from "@/lib/auth/AuthProvider";
 import { pick as pickBilingual } from "@/lib/utils/format";
 import { api, patientId } from "@/lib/data/service";
-import type { Bilingual, NationalIdentity } from "@/types/domain";
-import { Send, PlusCircle, CheckCircle2, AlertTriangle, RefreshCw } from "lucide-react";
+import type { Bilingual, ConditionFlagItem, NationalIdentity } from "@/types/domain";
+import { Send, PlusCircle, CheckCircle2, AlertTriangle, RefreshCw, ShieldAlert } from "lucide-react";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export default function DoctorReferralsPage() {
   const { locale } = useLocale();
+  const { user: me } = useAuth();
   const isAr = locale === "ar";
   const pick = (v: Bilingual) => pickBilingual(v, locale);
+  const canActOnIncoming = !me || me.role !== "DOCTOR";
 
   const [referrals, setReferrals] = useState<any[]>([]);
+  const [conditionFlags, setConditionFlags] = useState<ConditionFlagItem[]>([]);
   const [patients, setPatients] = useState<NationalIdentity[]>([]);
+  const [labs, setLabs] = useState<{ id: string; nameEn: string; nameAr: string }[]>([]);
+  const [hospitals, setHospitals] = useState<{ id: string; nameEn: string; nameAr: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [filterTarget, setFilterTarget] = useState<string>("ALL");
@@ -36,12 +42,27 @@ export default function DoctorReferralsPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const [refList, patList] = await Promise.all([
+      const isDoc = !me || me.role === "DOCTOR";
+      const [refList, queueList, rxList, adminPatients, flagList, labList, hospList] = await Promise.all([
         api.getReferrals(),
-        api.searchPatients(""),
+        api.getQueue().catch(() => []),
+        api.getPrescriptions().catch(() => []),
+        isDoc ? Promise.resolve([] as NationalIdentity[]) : api.searchPatients("").catch(() => []),
+        api.getConditionFlags().catch(() => []),
+        api.getLabs().catch(() => []),
+        api.getHospitals().catch(() => []),
       ]);
+      const pMap = new Map<string, NationalIdentity>();
+      for (const tk of queueList) pMap.set(patientId(tk.patient), tk.patient);
+      for (const rx of rxList) pMap.set(patientId(rx.patient), rx.patient);
+      for (const ap of adminPatients) pMap.set(patientId(ap), ap);
+      const patList = Array.from(pMap.values());
+
       setReferrals(refList);
       setPatients(patList);
+      setConditionFlags(flagList);
+      setLabs(labList);
+      setHospitals(hospList);
       if (patList.length > 0 && !form.patientId) {
         setForm((f) => ({ ...f, patientId: patientId(patList[0]!) }));
       }
@@ -52,7 +73,25 @@ export default function DoctorReferralsPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (me) void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me?.role]);
+
+  const handleReviewFlag = async (id: string, status: "APPROVED" | "REJECTED") => {
+    try {
+      await api.reviewConditionFlag(id, status);
+      setToast({
+        type: "ok",
+        msg: status === "APPROVED"
+          ? (isAr ? "تم اعتماد التنبيه وإضافته تلقائياً للملف الطبي وبطاقة الطوارئ للمواطن" : "Condition approved and added to citizen medical profile & NFC card")
+          : (isAr ? "تم رفض التنبيه المعملي" : "Condition flag rejected"),
+      });
+      await load();
+    } catch (err: any) {
+      setToast({ type: "err", msg: err?.message ?? "Review failed" });
+    }
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,6 +116,19 @@ export default function DoctorReferralsPage() {
       await load();
     } catch (err: any) {
       setToast({ type: "err", msg: err?.message ?? "Action failed" });
+    }
+  };
+
+  const handleCancel = async (id: string) => {
+    try {
+      await api.cancelReferral(id);
+      setToast({
+        type: "ok",
+        msg: isAr ? "تم إلغاء التحويل الطبي بنجاح" : "Referral cancelled",
+      });
+      await load();
+    } catch (err: any) {
+      setToast({ type: "err", msg: err?.message ?? "Cancel failed" });
     }
   };
 
@@ -154,8 +206,31 @@ export default function DoctorReferralsPage() {
 
             {form.targetType === "HOSPITAL" && (
               <>
+                {hospitals.length > 0 && (
+                  <div>
+                    <label className="block text-xs text-on-surface-variant mb-1">
+                      {isAr ? "المستشفى المستقبِل بالشبكة القومية" : "Target Registered Hospital"}
+                    </label>
+                    <select
+                      onChange={(e) => {
+                        const h = hospitals.find((x) => x.id === e.target.value);
+                        if (h) {
+                          setForm({ ...form, departmentEn: h.nameEn, departmentAr: h.nameAr });
+                        }
+                      }}
+                      className="w-full px-3 py-2 rounded-lg border border-outline-variant/40 bg-surface-container-low text-sm"
+                    >
+                      <option value="">{isAr ? "— اختر مستشفى من الشبكة أو اكتب القسم —" : "— Select registered hospital —"}</option>
+                      {hospitals.map((h) => (
+                        <option key={h.id} value={h.id}>
+                          {isAr ? h.nameAr : h.nameEn}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div>
-                  <label className="block text-xs text-on-surface-variant mb-1">{isAr ? "القسم (EN)" : "Department (EN)"}</label>
+                  <label className="block text-xs text-on-surface-variant mb-1">{isAr ? "المستشفى / القسم (EN)" : "Hospital / Dept (EN)"}</label>
                   <input
                     value={form.departmentEn}
                     onChange={(e) => setForm({ ...form, departmentEn: e.target.value })}
@@ -163,7 +238,7 @@ export default function DoctorReferralsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-on-surface-variant mb-1">{isAr ? "القسم (AR)" : "Department (AR)"}</label>
+                  <label className="block text-xs text-on-surface-variant mb-1">{isAr ? "المستشفى / القسم (AR)" : "Hospital / Dept (AR)"}</label>
                   <input
                     value={form.departmentAr}
                     onChange={(e) => setForm({ ...form, departmentAr: e.target.value })}
@@ -174,20 +249,45 @@ export default function DoctorReferralsPage() {
             )}
 
             {form.targetType === "LAB" && (
-              <div>
-                <label className="block text-xs text-on-surface-variant mb-1">{isAr ? "الفحص المعملي المطلوب" : "Test Panel"}</label>
-                <select
-                  value={form.testPanel}
-                  onChange={(e) => setForm({ ...form, testPanel: e.target.value })}
-                  className="w-full px-3 py-2 rounded-lg border border-outline-variant/40 bg-surface-container-low text-sm"
-                >
-                  <option value="CBC">Complete Blood Count (CBC)</option>
-                  <option value="HBA1C">HbA1c (السكر التراكمي)</option>
-                  <option value="LIPID">Lipid Profile (دهون الدم)</option>
-                  <option value="LFT">Liver Function (وظائف كبد)</option>
-                  <option value="RFT">Renal Function (وظائف كلى)</option>
-                </select>
-              </div>
+              <>
+                {labs.length > 0 && (
+                  <div>
+                    <label className="block text-xs text-on-surface-variant mb-1">
+                      {isAr ? "المعمل المستقبِل بالجمهورية" : "Target Registered Laboratory"}
+                    </label>
+                    <select
+                      onChange={(e) => {
+                        const l = labs.find((x) => x.id === e.target.value);
+                        if (l) {
+                          setForm({ ...form, departmentEn: l.nameEn, departmentAr: l.nameAr });
+                        }
+                      }}
+                      className="w-full px-3 py-2 rounded-lg border border-outline-variant/40 bg-surface-container-low text-sm"
+                    >
+                      <option value="">{isAr ? "— اختر المعمل المطلوب التحويل إليه —" : "— Select registered laboratory —"}</option>
+                      {labs.map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {isAr ? l.nameAr : l.nameEn}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div>
+                  <label className="block text-xs text-on-surface-variant mb-1">{isAr ? "الفحص المعملي المطلوب" : "Test Panel"}</label>
+                  <select
+                    value={form.testPanel}
+                    onChange={(e) => setForm({ ...form, testPanel: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg border border-outline-variant/40 bg-surface-container-low text-sm"
+                  >
+                    <option value="CBC">Complete Blood Count (CBC)</option>
+                    <option value="HBA1C">HbA1c (السكر التراكمي)</option>
+                    <option value="LIPID">Lipid Profile (دهون الدم)</option>
+                    <option value="LFT">Liver Function (وظائف كبد)</option>
+                    <option value="RFT">Renal Function (وظائف كلى)</option>
+                  </select>
+                </div>
+              </>
             )}
 
             <div className="md:col-span-3">
@@ -208,6 +308,65 @@ export default function DoctorReferralsPage() {
               </button>
             </div>
           </form>
+        </Card>
+      )}
+
+      {conditionFlags.length > 0 && (
+        <Card className="p-4 border-amber-500/30 bg-amber-500/5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold text-sm flex items-center gap-2 text-amber-800 dark:text-amber-300">
+              <ShieldAlert className="w-4 h-4" />
+              {isAr ? "تنبيهات المعمل الإكلينيكية بانتظار اعتماد الطبيب (للملف الطبي وبطاقة الطوارئ)" : "Lab Clinical Condition Flags (Awaiting Physician Approval)"}
+            </h3>
+            <span className="text-xs font-mono font-bold text-amber-700 dark:text-amber-300">
+              {conditionFlags.filter((f) => f.status === "PENDING").length} {isAr ? "قيد المراجعة" : "Pending"}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+            {conditionFlags.slice(0, 6).map((fl) => (
+              <div key={fl.id} className="flex items-center justify-between gap-2 rounded-lg border border-outline-variant/40 bg-surface-container-lowest p-3 text-xs">
+                <div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-bold text-on-surface">
+                      {fl.patient ? (isAr ? fl.patient.fullNameAr : fl.patient.fullNameEn) : fl.patientId}
+                    </span>
+                    <span className="font-mono text-[11px] text-primary">{fl.patient?.mti}</span>
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${fl.conditionType === "ALLERGY" ? "bg-red-500/15 text-red-700" : "bg-amber-500/15 text-amber-700"}`}>
+                      {fl.conditionType === "ALLERGY" ? (isAr ? "حساسية" : "Allergy") : (isAr ? "مرض مزمن" : "Chronic")}
+                    </span>
+                  </div>
+                  <p className="font-semibold text-on-surface mt-0.5">
+                    {isAr ? fl.conditionAr : fl.conditionEn}
+                  </p>
+                  {fl.flaggedBy && (
+                    <p className="text-[11px] text-on-surface-variant">
+                      {isAr ? "مرفوع من:" : "Flagged by:"} {isAr ? fl.flaggedBy.fullNameAr : fl.flaggedBy.fullNameEn}
+                    </p>
+                  )}
+                </div>
+                {fl.status === "PENDING" ? (
+                  <div className="flex gap-1.5 shrink-0">
+                    <button
+                      onClick={() => handleReviewFlag(fl.id, "APPROVED")}
+                      className="px-2.5 py-1 rounded bg-emerald-600 text-white font-semibold hover:opacity-90"
+                    >
+                      {isAr ? "اعتماد وإضافة" : "Approve"}
+                    </button>
+                    <button
+                      onClick={() => handleReviewFlag(fl.id, "REJECTED")}
+                      className="px-2.5 py-1 rounded bg-red-600/15 text-red-700 font-semibold hover:bg-red-600/25"
+                    >
+                      {isAr ? "رفض" : "Reject"}
+                    </button>
+                  </div>
+                ) : (
+                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${fl.status === "APPROVED" ? "bg-emerald-500/15 text-emerald-700" : "bg-red-500/15 text-red-700"}`}>
+                    {fl.status}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
         </Card>
       )}
 
@@ -283,7 +442,7 @@ export default function DoctorReferralsPage() {
                       </span>
                     </td>
                     <td className="p-3 text-end space-x-1 rtl:space-x-reverse">
-                      {r.status === "PENDING" && (
+                      {canActOnIncoming && r.status === "PENDING" && (
                         <button
                           onClick={() => handleAction(r.id, "ACCEPTED")}
                           className="px-2.5 py-1 rounded bg-blue-600 text-white text-xs font-semibold"
@@ -291,13 +450,26 @@ export default function DoctorReferralsPage() {
                           {isAr ? "قبول" : "Accept"}
                         </button>
                       )}
-                      {(r.status === "PENDING" || r.status === "ACCEPTED") && (
+                      {canActOnIncoming && (r.status === "PENDING" || r.status === "ACCEPTED") && (
                         <button
                           onClick={() => handleAction(r.id, "COMPLETED")}
                           className="px-2.5 py-1 rounded bg-emerald-600 text-white text-xs font-semibold"
                         >
                           {isAr ? "إتمام" : "Complete"}
                         </button>
+                      )}
+                      {!canActOnIncoming && r.status === "PENDING" && (
+                        <button
+                          onClick={() => handleCancel(r.id)}
+                          className="px-2.5 py-1 rounded border border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300 text-xs font-semibold hover:bg-red-500/20"
+                        >
+                          {isAr ? "إلغاء الإحالة" : "Cancel"}
+                        </button>
+                      )}
+                      {!canActOnIncoming && r.status !== "PENDING" && (
+                        <span className="text-xs text-on-surface-variant">
+                          {isAr ? "تُدار من الجهة المستقبِلة" : "Managed by Receiver"}
+                        </span>
                       )}
                     </td>
                   </tr>

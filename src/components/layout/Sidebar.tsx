@@ -15,6 +15,7 @@ import {
   Siren,
 } from "lucide-react";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
+import { useAuth } from "@/lib/auth/AuthProvider";
 import { cn } from "@/lib/utils/cn";
 import type { NavItem } from "@/lib/nav";
 
@@ -43,7 +44,9 @@ export function Sidebar({
 }) {
   const pathname = usePathname();
   const { t, locale } = useLocale();
+  const { user } = useAuth();
   const ar = locale === "ar";
+  const showSectorSwitcher = !user || user.role === "ADMIN" || user.role === "EXECUTIVE";
 
   return (
     <>
@@ -87,34 +90,62 @@ export function Sidebar({
             })}
           </nav>
 
-          {/* Sovereign Cross-Sector Switcher */}
-          <div className="mx-2 mt-1 border-t border-outline-variant/40 pt-2 pb-2">
-            <p className="px-2 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
-              {ar ? "التنقل السريع بين قطاعات المنظومة" : "Sovereign Sector Switcher"}
-            </p>
-            <div className="grid grid-cols-2 gap-1">
-              {SECTOR_LINKS.map((sec) => {
-                const Icon = sec.icon;
-                const activeSector = pathname.startsWith("/" + sec.href.split("/")[1]);
-                return (
-                  <Link
-                    key={sec.href}
-                    href={sec.href}
-                    onClick={onClose}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-colors",
-                      activeSector
-                        ? "bg-secondary-container text-on-secondary-container font-bold"
-                        : "bg-surface-container-low/60 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
-                    )}
-                  >
-                    <Icon className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate">{ar ? sec.ar : sec.en}</span>
-                  </Link>
-                );
-              })}
+          {/* Sovereign Cross-Sector Switcher (Admin / Executive) vs Strict Facility Isolation Card (Staff) */}
+          {showSectorSwitcher ? (
+            <div className="mx-2 mt-1 border-t border-outline-variant/40 pt-2 pb-2">
+              <p className="px-2 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                {ar ? "التنقل السريع بين قطاعات المنظومة" : "Sovereign Sector Switcher"}
+              </p>
+              <div className="grid grid-cols-2 gap-1">
+                {SECTOR_LINKS.map((sec) => {
+                  const Icon = sec.icon;
+                  const activeSector = pathname.startsWith("/" + sec.href.split("/")[1]);
+                  return (
+                    <Link
+                      key={sec.href}
+                      href={sec.href}
+                      onClick={onClose}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-colors",
+                        activeSector
+                          ? "bg-secondary-container text-on-secondary-container font-bold"
+                          : "bg-surface-container-low/60 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+                      )}
+                    >
+                      <Icon className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{ar ? sec.ar : sec.en}</span>
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="mx-2 mt-2 border-t border-outline-variant/40 pt-3 pb-2">
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 space-y-1.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-primary">
+                  {ar ? "المنشأة الطبية التابع لها" : "Assigned Medical Facility"}
+                </p>
+                <p className="text-xs font-bold text-on-surface leading-snug">
+                  {(ar ? user.facilityAr : user.facilityEn) || (ar ? "منشأة طبية معتمدة بالشبكة" : "Registered National Facility")}
+                </p>
+                {(user.specialityAr || user.specialityEn) && (
+                  <p className="text-[11px] text-secondary font-semibold">
+                    {ar ? (user.specialityAr ?? user.specialityEn) : (user.specialityEn ?? user.specialityAr)}
+                  </p>
+                )}
+                {user.licenseNo && (
+                  <p className="text-[10px] font-mono text-on-surface-variant" dir="ltr">
+                    ID: {user.licenseNo}
+                  </p>
+                )}
+                <p className="text-[10px] text-on-surface-variant pt-0.5">
+                  {ar
+                    ? "الوصول مقصور على مهام وصلاحيات هذه المنشأة فقط."
+                    : "Access strictly scoped to this facility & role."}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
         <div className="m-2 flex flex-col gap-2 rounded-xl bg-surface-container-low p-3">
           <div className="flex items-center justify-between">

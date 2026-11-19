@@ -6,9 +6,10 @@ import { RefreshCw, Check, X } from "lucide-react";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { useToast } from "@/lib/toast/ToastProvider";
 import { useApiError } from "@/lib/api/useApiError";
-import { api } from "@/lib/data/service";
+import { api, rxCode } from "@/lib/data/service";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { pick, formatDate } from "@/lib/utils/format";
 
@@ -28,8 +29,18 @@ export default function RenewalsPage() {
   async function act(id: string, kind: "approve" | "reject") {
     setBusyId(id);
     try {
-      if (kind === "approve") { await api.approveRenewal(id); push("success", ar ? "تمت الموافقة وأُنشئت مسودة روشتة جديدة" : "Approved; a new draft prescription was created"); }
-      else { await api.rejectRenewal(id); push("info", ar ? "تم رفض الطلب" : "Request rejected"); }
+      if (kind === "approve") {
+        await api.approveRenewal(id);
+        push(
+          "success",
+          ar
+            ? "تمت الموافقة وتوقيع الروشتة رقمياً وإرسالها للصيدلية"
+            : "Renewal approved, digitally signed & sent to pharmacy"
+        );
+      } else {
+        await api.rejectRenewal(id);
+        push("info", ar ? "تم رفض الطلب" : "Request rejected");
+      }
       await load();
     } catch (e) { handleError(e); await load(); } finally { setBusyId(null); }
   }
@@ -43,22 +54,33 @@ export default function RenewalsPage() {
           {items.length === 0 && <p className="py-8 text-center text-sm text-on-surface-variant">{ar ? "لا توجد طلبات" : "No requests"}</p>}
           {items.map((r) => (
             <div key={r.id} className="flex flex-col gap-2 rounded-lg border border-outline-variant/40 p-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
+              <div className="flex items-start gap-3">
                 <div className="relative h-11 w-11 shrink-0"><Image src={r.patient.photoUrl} alt="" fill sizes="44px" className="rounded-lg object-cover" unoptimized /></div>
-                <div>
-                  <p className="text-sm font-bold text-on-surface">{pick(r.patient.fullName, locale)}</p>
+                <div className="space-y-0.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-bold text-on-surface">{pick(r.patient.fullName, locale)}</p>
+                    {r.prescription && <Badge tone="secondary">#{rxCode(r.prescription)}</Badge>}
+                  </div>
                   <p className="text-xs text-on-surface-variant">{ar ? "طُلب في" : "Requested"} {formatDate(r.createdAt, locale)} • MTI {r.patient.mti}</p>
+                  {r.prescription && (
+                    <div className="pt-1 text-xs">
+                      <p className="font-semibold text-primary">{pick(r.prescription.diagnosis, locale)}</p>
+                      <p className="text-on-surface-variant">
+                        {r.prescription.medications.map((m) => `${pick(m.name, locale)} (${m.dose})`).join("، ")}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="flex gap-2 ps-14 sm:ps-0">
+              <div className="flex gap-2 ps-14 sm:ps-0 shrink-0">
                 <Button size="sm" variant="outline" loading={busyId === r.id} icon={<X className="h-4 w-4" />} onClick={() => act(r.id, "reject")}>{ar ? "رفض" : "Reject"}</Button>
-                <Button size="sm" loading={busyId === r.id} icon={<Check className="h-4 w-4" />} onClick={() => act(r.id, "approve")}>{ar ? "موافقة" : "Approve"}</Button>
+                <Button size="sm" loading={busyId === r.id} icon={<Check className="h-4 w-4" />} onClick={() => act(r.id, "approve")}>{ar ? "موافقة وتوقيع" : "Approve & Sign"}</Button>
               </div>
             </div>
           ))}
         </CardContent>
       </Card>
-      <p className="text-xs text-on-surface-variant">{ar ? "الموافقة تُنشئ مسودة نسخة من الروشتة السابقة تراجعها وتوقّعها بنفسك قبل أن تصل للصيدلية." : "Approving creates a draft copy of the previous prescription that you still review and sign before it reaches the pharmacy."}</p>
+      <p className="text-xs text-on-surface-variant">{ar ? "الموافقة تنسخ الروشتة وتوقعها بالختم الرقمي وترسلها مباشرة للصيدلية وتُحدّث تطبيق المواطن فوراً." : "Approving clones the prescription, applies the digital signature seal, sends it directly to pharmacy, and notifies the citizen app."}</p>
     </div>
   );
 }

@@ -87,6 +87,7 @@ export default function PharmacyInventoryPage() {
         dose: newDrug.dose,
         quantity: Number(newDrug.quantity),
         reorderAt: Number(newDrug.reorderAt),
+        unitCost: Number(newDrug.unitPrice),
         unitPrice: Number(newDrug.unitPrice),
       });
       push("success", ar ? "تمت إضافة الصنف الدوائي للمخزن" : "Medication added to inventory");
@@ -171,7 +172,7 @@ export default function PharmacyInventoryPage() {
                     </div>
                     <p className="text-xs text-on-surface-variant mt-1">
                       {pick({ en: r.formEn ?? r.form, ar: r.formAr ?? r.form }, locale) || "Medicine"}
-                      {r.unitPrice ? ` • ${r.unitPrice} EGP` : ""}
+                      {(r.unitCost ?? r.unitPrice) ? ` • ${r.unitCost ?? r.unitPrice} EGP` : ""}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-3 text-sm">

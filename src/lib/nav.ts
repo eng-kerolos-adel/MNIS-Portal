@@ -19,14 +19,15 @@ export type PortalKey = "doctor" | "pharmacy" | "lab" | "hospital" | "analytics"
 
 export const portalNav: Record<PortalKey, NavItem[]> = {
   doctor: [
-    { href: "/doctor/queue", icon: Users, labelKey: "nav.doctor.queue", live: true },
     { href: "/doctor/consultation", icon: Stethoscope, labelKey: "nav.doctor.consultation", live: true },
+    { href: "/doctor/schedule", icon: CalendarClock, labelKey: "nav.doctor.schedule", live: true },
+    { href: "/doctor/appointments", icon: CalendarCheck, labelKey: "nav.doctor.appointments", live: true },
+    { href: "/doctor/queue", icon: Users, labelKey: "nav.doctor.queue", live: true },
     { href: "/doctor/renewals", icon: RefreshCw, labelKey: "nav.doctor.renewals", live: true },
     { href: "/doctor/shared-record", icon: QrCode, labelKey: "nav.doctor.sharedRecord", live: true },
     { href: "/doctor/e-prescriptions", icon: FileText, labelKey: "nav.doctor.ePrescriptions", live: true },
     { href: "/doctor/lab-orders", icon: FlaskConical, labelKey: "nav.doctor.labOrders", live: true },
     { href: "/doctor/referrals", icon: Send, labelKey: "nav.doctor.referrals", live: true },
-    { href: "/doctor/schedule", icon: CalendarClock, labelKey: "nav.doctor.schedule", live: true },
   ],
   pharmacy: [
     { href: "/pharmacy/dispensing-queue", icon: PackageCheck, labelKey: "nav.pharmacy.dispensingQueue", live: true },
@@ -37,6 +38,7 @@ export const portalNav: Record<PortalKey, NavItem[]> = {
     { href: "/pharmacy/financial-settlement", icon: Wallet, labelKey: "nav.pharmacy.financialSettlement", live: true },
   ],
   lab: [
+    { href: "/lab/appointments", icon: CalendarCheck, labelKey: "nav.lab.appointments", live: true },
     { href: "/lab/sample-intake", icon: TestTubes, labelKey: "nav.lab.sampleIntake", live: true },
     { href: "/lab/results", icon: ClipboardCheck, labelKey: "nav.lab.resultsEntry", live: true },
     { href: "/lab/radiology", icon: ScanEye, labelKey: "nav.lab.radiology", live: true },
@@ -64,7 +66,6 @@ export const portalNav: Record<PortalKey, NavItem[]> = {
   ],
   reception: [
     { href: "/reception/citizens", icon: UserPlus, labelKey: "nav.reception.citizens", live: true },
-    { href: "/reception/appointments", icon: CalendarCheck, labelKey: "nav.reception.appointments", live: true },
   ],
   admin: [
     { href: "/admin/users", icon: UsersRound, labelKey: "nav.admin.users", live: true },
@@ -93,7 +94,10 @@ export const ROLE_PORTAL: Record<string, PortalKey | null> = {
   PATIENT: null,
 };
 
-export function homeFor(role: string): string {
+export function homeFor(role: string, specialityEn?: string | null): string {
+  if (role === "DOCTOR") return "/doctor/consultation";
+  if (role === "RECEPTIONIST" && specialityEn === "CLINIC_ASSISTANT") return "/doctor/appointments";
+  if (role === "LAB_TECH" && specialityEn === "LAB_RECEPTION") return "/lab/appointments";
   const portal = ROLE_PORTAL[role];
   if (!portal) return "/login";
   const items = portalNav[portal];

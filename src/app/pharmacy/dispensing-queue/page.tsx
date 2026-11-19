@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import { PackageCheck, CheckCircle2, ShieldAlert, Package, ShieldCheck } from "lucide-react";
+import { PackageCheck, CheckCircle2, ShieldAlert, Package, ShieldCheck, RefreshCw } from "lucide-react";
+import { useAutoRefresh } from "@/lib/hooks/useAutoRefresh";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { useToast } from "@/lib/toast/ToastProvider";
 import { useApiError } from "@/lib/api/useApiError";
@@ -15,6 +16,7 @@ import { Button } from "@/components/ui/Button";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { StatCard } from "@/components/ui/StatCard";
 import { Tabs } from "@/components/ui/Tabs";
+import { IncomingReferralsCard } from "@/components/referrals/IncomingReferralsCard";
 import { matchesPatientQuery, pick } from "@/lib/utils/format";
 
 const TONE: Record<Prescription["status"], "warning" | "secondary" | "success" | "error" | "neutral"> = {
@@ -40,13 +42,19 @@ export default function DispensingQueuePage() {
   const handleError = useApiError();
   const ar = locale === "ar";
   const [items, setItems] = useState<Prescription[]>([]);
+  const [referrals, setReferrals] = useState<Awaited<ReturnType<typeof api.getReferrals>>>([]);
   const [query, setQuery] = useState("");
   const [tab, setTab] = useState<"queue" | "history">("queue");
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      setItems(await api.getPrescriptions());
+      const [rxList, refs] = await Promise.all([
+        api.getPrescriptions(),
+        api.getReferrals().catch(() => []),
+      ]);
+      setItems(rxList);
+      setReferrals(refs);
     } catch (e) {
       handleError(e);
     }
@@ -54,6 +62,7 @@ export default function DispensingQueuePage() {
   useEffect(() => {
     void load();
   }, [load]);
+  useAutoRefresh(load, 15_000);
 
   const filtered = useMemo(() => {
     const base = items.filter((rx) =>
@@ -107,7 +116,12 @@ export default function DispensingQueuePage() {
       <PageHeader
         icon={PackageCheck}
         title={ar ? "قائمة صرف الروشتات الموحدة" : "Dispensing queue"}
-        badge={ar ? "تحقق فوري بالرقم القومي و MTI ثم صرف وخصم آلي من المخزن" : "Verify by National ID/MTI, then dispense"}
+        badge={ar ? "مزامنة حية (15 ث) • تحقق بالختم الرقمي ثم صرف آلي" : "Live Sync 15s • Cryptographic seal verification"}
+        actions={
+          <Button variant="outline" size="sm" icon={<RefreshCw className="h-4 w-4" />} onClick={load}>
+            {ar ? "تحديث" : "Refresh"}
+          </Button>
+        }
       />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard icon={ShieldAlert} label={ar ? "بانتظار التحقق" : "Awaiting verification"} value={awaiting} tone="warning" />
@@ -115,6 +129,7 @@ export default function DispensingQueuePage() {
         <StatCard icon={CheckCircle2} label={ar ? "تم الصرف" : "Dispensed"} value={dispensed} tone="success" />
         <StatCard icon={PackageCheck} label={ar ? "الإجمالي" : "Total"} value={items.length} tone="primary" />
       </div>
+      <IncomingReferralsCard targetType="PHARMACY" referrals={referrals} onUpdated={load} />
       <Card>
         <CardHeader className="flex-col items-start gap-3 sm:flex-row sm:items-center">
           <Tabs
@@ -165,6 +180,17 @@ export default function DispensingQueuePage() {
                   </div>
                   <p className="text-xs text-on-surface-variant mt-0.5">
                     {rx.medications.map((m) => `${pick(m.name, locale)} (${m.dose})`).join("، ")}
+                  </p>
+                  <p className="text-[11px] text-on-surface-variant/80 mt-0.5">
+                    {(rx.physician.en || rx.physician.ar) && (
+                      <span>{ar ? "الطبيب:" : "Dr."} <strong>{pick(rx.physician, locale)}</strong></span>
+                    )}
+                    {rx.verifiedBy && (
+                      <span> • {ar ? "تحقق:" : "Verified:"} {pick(rx.verifiedBy, locale)}</span>
+                    )}
+                    {rx.dispensedBy && (
+                      <span> • {ar ? "صرف:" : "Dispensed:"} {pick(rx.dispensedBy, locale)}</span>
+                    )}
                   </p>
                 </div>
               </div>

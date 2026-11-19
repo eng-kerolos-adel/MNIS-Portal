@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -34,18 +34,45 @@ export function AppShell({ portal, children }: { portal: PortalKey; children: Re
   const { locale, t } = useLocale();
   const { user, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const allowed = !!user && !user.mustChangePassword && (ROLE_PORTAL[user.role] === portal || !!ROLE_PORTAL[user.role]);
+  const isClinicAssistant =
+    !!user &&
+    (user.specialityEn === "CLINIC_ASSISTANT" ||
+      (portal === "doctor" && user.role === "RECEPTIONIST"));
+  const isDoctorOnly = !!user && user.role === "DOCTOR" && portal === "doctor";
+  const isLabReception =
+    !!user &&
+    user.role === "LAB_TECH" &&
+    user.specialityEn === "LAB_RECEPTION" &&
+    portal === "lab";
+
+  const subRoleBlocked =
+    (isClinicAssistant && pathname !== "/doctor/appointments" && pathname !== "/doctor/queue") ||
+    (isLabReception && pathname !== "/lab/appointments" && pathname !== "/lab/sample-intake");
+
+  const allowed =
+    !!user &&
+    !user.mustChangePassword &&
+    (user.role === "ADMIN" ||
+      user.role === "EXECUTIVE" ||
+      (isClinicAssistant && portal === "doctor") ||
+      (!isClinicAssistant && ROLE_PORTAL[user.role] === portal));
 
   useEffect(() => {
     if (loading) return;
     if (!user) router.replace("/login");
     else if (user.mustChangePassword) router.replace("/change-password");
-    else if (!allowed) router.replace(homeFor(user.role));
-  }, [user, loading, allowed, router]);
+    else if (!allowed) router.replace(homeFor(user.role, user.specialityEn));
+    else if (isClinicAssistant && pathname !== "/doctor/appointments" && pathname !== "/doctor/queue") {
+      router.replace("/doctor/appointments");
+    } else if (isLabReception && pathname !== "/lab/appointments" && pathname !== "/lab/sample-intake") {
+      router.replace("/lab/appointments");
+    }
+  }, [user, loading, allowed, router, isClinicAssistant, isLabReception, pathname]);
 
-  if (loading || !allowed || !user) {
+  if (loading || !allowed || !user || subRoleBlocked) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <Loader2 className="h-6 w-6 animate-spin text-secondary" />
@@ -53,8 +80,27 @@ export function AppShell({ portal, children }: { portal: PortalKey; children: Re
     );
   }
 
-  const items = portalNav[portal];
-  const roleLabel = ROLE_LABEL[user.role]?.[locale] ?? user.role;
+  const items = portalNav[portal].filter((item) => {
+    if (user.role === "ADMIN" || user.role === "EXECUTIVE") return true;
+    if (isClinicAssistant) {
+      return item.href === "/doctor/appointments" || item.href === "/doctor/queue";
+    }
+    if (isDoctorOnly) {
+      return item.href !== "/doctor/appointments" && item.href !== "/doctor/queue";
+    }
+    if (isLabReception) {
+      return item.href === "/lab/appointments" || item.href === "/lab/sample-intake";
+    }
+    return true;
+  });
+
+  const roleLabel =
+    user.specialityEn === "CLINIC_ASSISTANT"
+      ? (locale === "ar" ? "مساعد عيادة الطبيب" : "Clinic Assistant")
+      : user.specialityEn === "LAB_RECEPTION"
+        ? (locale === "ar" ? "استقبال المعمل" : "Lab Reception")
+        : (ROLE_LABEL[user.role]?.[locale] ?? user.role);
+  const subtitle = (locale === "ar" ? user.facilityAr : user.facilityEn) || FACILITY[portal][locale];
 
   return (
     <div className="min-h-screen bg-background">
@@ -62,7 +108,7 @@ export function AppShell({ portal, children }: { portal: PortalKey; children: Re
       <div className="flex min-h-screen flex-col ps-0 lg:ps-72">
         <Header
           title={`${t("brand.name")} — ${t(portalMeta[portal].titleKey)}`}
-          subtitle={FACILITY[portal][locale]}
+          subtitle={subtitle}
           staffName={locale === "ar" ? user.fullNameAr : user.fullNameEn}
           staffRole={roleLabel}
           onMenu={() => setMobileOpen(true)}

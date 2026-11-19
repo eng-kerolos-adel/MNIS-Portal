@@ -14,7 +14,7 @@ export default function HomePage() {
   useEffect(() => {
     if (loading) return;
     if (!user) router.replace("/login");
-    else router.replace(user.mustChangePassword ? "/change-password" : homeFor(user.role));
+    else router.replace(user.mustChangePassword ? "/change-password" : homeFor(user.role, user.specialityEn));
   }, [user, loading, router]);
 
   return (

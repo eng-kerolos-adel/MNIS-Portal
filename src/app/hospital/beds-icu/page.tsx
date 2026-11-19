@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BedDouble, HeartPulse, Sparkles, ShieldAlert } from "lucide-react";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
+import { useAuth } from "@/lib/auth/AuthProvider";
 import { useToast } from "@/lib/toast/ToastProvider";
 import { useApiError } from "@/lib/api/useApiError";
 import { api } from "@/lib/data/service";
@@ -33,6 +34,7 @@ const STATUS_LABEL: Record<Bed["status"], { en: string; ar: string }> = {
 
 export default function BedsIcuPage() {
   const { locale, t } = useLocale();
+  const { user: me } = useAuth();
   const { push } = useToast();
   const handleError = useApiError();
   const [beds, setBeds] = useState<Bed[]>([]);
@@ -62,7 +64,7 @@ export default function BedsIcuPage() {
       <PageHeader
         icon={BedDouble}
         title={locale === "ar" ? "إدارة الأسرة والعناية المركزة" : "Bed & ICU capacity management"}
-        badge={locale === "ar" ? "مستشفى عين شمس الجامعي" : "Ain Shams University Hospital"}
+        badge={(locale === "ar" ? me?.facilityAr : me?.facilityEn) || (locale === "ar" ? "مركز إدارة الأسرة والعناية" : "Hospital Bed & ICU Center")}
       />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">

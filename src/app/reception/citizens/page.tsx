@@ -133,7 +133,7 @@ export default function CitizenAccountsPage() {
                 : `NFC/QR Smart Emergency Card Issued & Activated (${issuedNfc?.mti ?? cred?.mti})`}
             </p>
             <p className="font-mono text-on-surface-variant mt-1">
-              Cryptographic Token: {issuedNfc?.token ?? cred?.nfcToken}
+              {ar ? "رمز بطاقة الطوارئ الذكية (NFC):" : "Smart NFC Card Reference:"} {issuedNfc?.token ?? cred?.nfcToken}
             </p>
           </div>
           <a

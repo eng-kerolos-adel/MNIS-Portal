@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { FlaskConical, Plus, Eye } from "lucide-react";
+import { FlaskConical, Plus, Eye, Printer } from "lucide-react";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { useToast } from "@/lib/toast/ToastProvider";
 import { useApiError } from "@/lib/api/useApiError";
@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { OfficialPrintModal } from "@/components/ui/OfficialPrintModal";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { pick, formatDate, matchesPatientQuery } from "@/lib/utils/format";
 import type { LabSample, NationalIdentity } from "@/types/domain";
@@ -34,10 +35,13 @@ export default function DoctorLabOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [selectedSample, setSelectedSample] = useState<LabSample | null>(null);
+  const [printSample, setPrintSample] = useState<LabSample | null>(null);
 
   const [orderModalOpen, setOrderModalOpen] = useState(false);
   const [citizenSearch, setCitizenSearch] = useState("");
   const [citizens, setCitizens] = useState<NationalIdentity[]>([]);
+  const [labs, setLabs] = useState<{ id: string; nameEn: string; nameAr: string }[]>([]);
+  const [targetLabId, setTargetLabId] = useState("");
   const [selectedCitizen, setSelectedCitizen] = useState<NationalIdentity | null>(null);
   const [panel, setPanel] = useState("Complete Blood Count (CBC)");
   const [priority, setPriority] = useState<"ROUTINE" | "URGENT" | "STAT">("URGENT");
@@ -45,8 +49,10 @@ export default function DoctorLabOrdersPage() {
 
   const load = useCallback(async () => {
     try {
-      const res = await api.getLabSamples();
+      const [res, labList] = await Promise.all([api.getLabSamples(), api.getLabs().catch(() => [])]);
       setItems(res);
+      setLabs(labList);
+      if (labList.length > 0) setTargetLabId((cur) => cur || labList[0]!.id);
     } catch (e) {
       handleError(e);
     } finally {
@@ -84,6 +90,7 @@ export default function DoctorLabOrdersPage() {
 
   async function submitNewOrder() {
     if (!selectedCitizen) return;
+    const chosenLab = labs.find((l) => l.id === targetLabId);
     setBusy(true);
     try {
       await api.orderLabSample({
@@ -93,10 +100,13 @@ export default function DoctorLabOrdersPage() {
         sampleTypeEn: "Venous Blood",
         sampleTypeAr: "عينة دم وريدي",
         priority,
+        targetLabUserId: targetLabId || undefined,
       });
       push(
         "success",
-        ar ? "تم إرسال طلب التحليل للمعمل المركزي فوراً" : "Lab sample order sent to Central Lab"
+        ar
+          ? `تم إرسال طلب التحليل إلى (${chosenLab?.nameAr || "المعمل المختار"}) فوراً`
+          : `Lab sample order sent to ${chosenLab?.nameEn || "Selected Lab"}`
       );
       setOrderModalOpen(false);
       await load();
@@ -178,6 +188,12 @@ export default function DoctorLabOrdersPage() {
                   </p>
                   <p className="text-xs text-on-surface-variant/70">
                     {formatDate(r.collectedAt, locale)}
+                    {(r.orderedBy.en || r.orderedBy.ar) && (
+                      <> • {ar ? "طلب:" : "Ordered by:"} {pick(r.orderedBy, locale)}</>
+                    )}
+                    {r.facility && (r.facility.en || r.facility.ar) && (
+                      <> • <strong className="text-primary">{pick(r.facility, locale)}</strong></>
+                    )}
                     {r.results && r.results.length > 0
                       ? ` • ${r.results.length} ${ar ? "مؤشرات معملية مرصودة" : "analytes recorded"}`
                       : ""}
@@ -225,6 +241,12 @@ export default function DoctorLabOrdersPage() {
               <p>
                 {ar ? "نوع العينة:" : "Sample Type:"}{" "}
                 <strong>{pick(selectedSample.sampleType, locale)}</strong>
+                {(selectedSample.orderedBy.en || selectedSample.orderedBy.ar) && (
+                  <> • {ar ? "طلب:" : "Ordered by:"} <strong>{pick(selectedSample.orderedBy, locale)}</strong></>
+                )}
+                {selectedSample.verifiedBy && (
+                  <> • {ar ? "اعتماد:" : "Verified by:"} <strong>{pick(selectedSample.verifiedBy, locale)}</strong></>
+                )}
               </p>
             </div>
 
@@ -274,9 +296,19 @@ export default function DoctorLabOrdersPage() {
                   : "Sample is currently in laboratory processing; numeric rows pending."}
               </p>
             )}
+            <div className="flex justify-end">
+              <Button
+                variant="outline"
+                icon={<Printer className="h-4 w-4" />}
+                onClick={() => setPrintSample(selectedSample)}
+              >
+                {ar ? "طباعة التقرير المعملي الرسمي بـ QR" : "Print Official Lab Report"}
+              </Button>
+            </div>
           </div>
         )}
       </Modal>
+      <OfficialPrintModal sample={printSample} onClose={() => setPrintSample(null)} />
 
       {/* Order New Lab Sample Modal */}
       <Modal
@@ -339,6 +371,19 @@ export default function DoctorLabOrdersPage() {
               Cardiac Troponin-I (STAT) — إنزيمات قلب طارئة
             </option>
           </select>
+          {labs.length > 0 && (
+            <select
+              className="h-10 w-full rounded-lg bg-surface-container-low px-3 text-sm outline-none"
+              value={targetLabId}
+              onChange={(e) => setTargetLabId(e.target.value)}
+            >
+              {labs.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {ar ? `المعمل: ${l.nameAr}` : `Lab: ${l.nameEn}`}
+                </option>
+              ))}
+            </select>
+          )}
           <select
             className="h-10 w-full rounded-lg bg-surface-container-low px-3 text-sm outline-none"
             value={priority}

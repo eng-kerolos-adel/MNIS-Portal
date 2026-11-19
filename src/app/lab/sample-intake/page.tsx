@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import { TestTubes, Clock, CheckCircle2, Truck, FlaskConical, XCircle } from "lucide-react";
+import { TestTubes, Clock, CheckCircle2, Truck, FlaskConical, XCircle, RefreshCw } from "lucide-react";
+import { useAutoRefresh } from "@/lib/hooks/useAutoRefresh";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
+import { useAuth } from "@/lib/auth/AuthProvider";
 import { useToast } from "@/lib/toast/ToastProvider";
 import { useApiError } from "@/lib/api/useApiError";
 import { api } from "@/lib/data/service";
@@ -14,6 +16,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { SearchInput } from "@/components/ui/SearchInput";
 import { StatCard } from "@/components/ui/StatCard";
+import { IncomingReferralsCard } from "@/components/referrals/IncomingReferralsCard";
 import { pick, formatTime, matchesPatientQuery } from "@/lib/utils/format";
 
 /** Same forward-only path the API enforces; results entry/verification live on the next screen. */
@@ -48,16 +51,24 @@ const PRIORITY_TONE: Record<LabSample["priority"], "neutral" | "warning" | "erro
 
 export default function SampleIntakePage() {
   const { locale } = useLocale();
+  const { user: me } = useAuth();
   const { push } = useToast();
   const handleError = useApiError();
   const ar = locale === "ar";
   const [samples, setSamples] = useState<LabSample[]>([]);
+  const [referrals, setReferrals] = useState<Awaited<ReturnType<typeof api.getReferrals>>>([]);
   const [query, setQuery] = useState("");
+  const [onlyMyLab, setOnlyMyLab] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      setSamples(await api.getLabSamples());
+      const [sList, refs] = await Promise.all([
+        api.getLabSamples(),
+        api.getReferrals().catch(() => []),
+      ]);
+      setSamples(sList);
+      setReferrals(refs);
     } catch (e) {
       handleError(e);
     }
@@ -65,18 +76,23 @@ export default function SampleIntakePage() {
   useEffect(() => {
     void load();
   }, [load]);
+  useAutoRefresh(load, 15_000);
 
   const filtered = useMemo(() => {
-    return samples.filter((s) =>
-      matchesPatientQuery(
+    const myFac = (me?.facilityEn ?? "").trim().toLowerCase();
+    return samples.filter((s) => {
+      if (onlyMyLab && myFac && (s.facility?.en ?? "").trim().toLowerCase() !== myFac) {
+        return false;
+      }
+      return matchesPatientQuery(
         s.patient,
         query,
         s.barcode,
         s.testPanel.ar,
         s.testPanel.en
-      )
-    );
-  }, [samples, query]);
+      );
+    });
+  }, [samples, query, onlyMyLab, me?.facilityEn]);
 
   async function move(id: string, status: LabSample["status"]) {
     setBusyId(id);
@@ -101,7 +117,29 @@ export default function SampleIntakePage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader icon={TestTubes} title={ar ? "استلام العينات وقائمة المعمل" : "Sample intake & lab queue"} />
+      <PageHeader
+        icon={TestTubes}
+        title={ar ? "استلام العينات وقائمة المعمل" : "Sample intake & lab queue"}
+        badge={(ar ? me?.facilityAr : me?.facilityEn) || (ar ? "مزامنة حية كل 15 ثانية" : "Live Sync 15s")}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {me?.facilityEn && (
+              <Button
+                variant={onlyMyLab ? "primary" : "outline"}
+                size="sm"
+                onClick={() => setOnlyMyLab((v) => !v)}
+              >
+                {onlyMyLab
+                  ? (ar ? "عرض عينات معملي فقط" : "My Lab Only")
+                  : (ar ? "جميع المعامل بالشبكة" : "All Network Labs")}
+              </Button>
+            )}
+            <Button variant="outline" size="sm" icon={<RefreshCw className="h-4 w-4" />} onClick={load}>
+              {ar ? "تحديث" : "Refresh"}
+            </Button>
+          </div>
+        }
+      />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard
           icon={Truck}
@@ -123,6 +161,7 @@ export default function SampleIntakePage() {
         />
         <StatCard icon={FlaskConical} label={ar ? "الإجمالي" : "Total"} value={samples.length} tone="secondary" />
       </div>
+      <IncomingReferralsCard targetType="LAB" referrals={referrals} onUpdated={load} />
       <Card>
         <CardHeader className="flex-col items-stretch gap-3 sm:flex-row sm:items-center">
           <CardTitle>{ar ? "العينات المسجلة" : "Samples"}</CardTitle>
@@ -169,6 +208,12 @@ export default function SampleIntakePage() {
                     </div>
                     <p className="text-xs text-on-surface-variant">
                       {pick(s.testPanel, locale)} • {pick(s.sampleType, locale)} • {formatTime(s.collectedAt, locale)}
+                      {(s.orderedBy.en || s.orderedBy.ar) && (
+                        <> • {ar ? "طلب:" : "Ordered by:"} <strong className="text-on-surface">{pick(s.orderedBy, locale)}</strong></>
+                      )}
+                      {s.facility && (s.facility.en || s.facility.ar) && (
+                        <> • <strong className="text-primary">{pick(s.facility, locale)}</strong></>
+                      )}
                     </p>
                   </div>
                 </div>

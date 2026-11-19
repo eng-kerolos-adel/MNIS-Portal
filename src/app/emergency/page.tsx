@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { ShieldAlert, Phone, AlertTriangle, Heart, Droplet, CheckCircle2, AlertOctagon, Radio, QrCode, Search } from "lucide-react";
+import { ShieldAlert, Phone, AlertTriangle, Heart, Droplet, CheckCircle2, AlertOctagon, Radio, Search } from "lucide-react";
 import { api } from "@/lib/data/service";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -18,22 +18,15 @@ interface EmergencyData {
   organDonor: boolean;
 }
 
-const DEMO_CARDS = [
-  { token: "NFC-EG-DEMO-001", labelAr: "أحمد محمد علي (A+ • حساسية بنسلين)", labelEn: "Ahmed Mohamed Ali (A+ • Penicillin)" },
-  { token: "NFC-EG-DEMO-002", labelAr: "منى حسن إبراهيم (O+ • حساسية أسبرين)", labelEn: "Mona Hassan (O+ • Aspirin)" },
-  { token: "NFC-EG-DEMO-005", labelAr: "محمود عبد الرحمن (O- • قصور كلوي)", labelEn: "Mahmoud Sayed (O- • CKD)" },
-  { token: "NFC-EG-DEMO-004", labelAr: "سارة خالد محمود (AB+ • حساسية سلفا)", labelEn: "Sara Khaled (AB+ • Sulfa)" },
-];
-
 const renderItem = (item: string | { en?: string; ar?: string }) =>
   typeof item === "string" ? item : item?.ar || item?.en || "—";
 
 function EmergencyTriageContent() {
   const searchParams = useSearchParams();
-  const initialToken = searchParams.get("mti") || searchParams.get("token") || "NFC-EG-DEMO-001";
+  const initialToken = searchParams.get("mti") || searchParams.get("token") || "";
 
   const [inputToken, setInputToken] = useState(initialToken);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(initialToken));
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<EmergencyData | null>(null);
 
@@ -53,7 +46,11 @@ function EmergencyTriageContent() {
   }, []);
 
   useEffect(() => {
-    void verify(initialToken);
+    if (initialToken.trim()) {
+      void verify(initialToken);
+    } else {
+      setLoading(false);
+    }
   }, [initialToken, verify]);
 
   return (
@@ -71,55 +68,55 @@ function EmergencyTriageContent() {
         </p>
       </div>
 
-      {/* Interactive NFC / QR Scanner & Demo Selector */}
+      {/* Interactive NFC / QR Scanner */}
       <div className="w-full max-w-2xl bg-slate-900/90 border border-slate-800 rounded-2xl p-4 mb-4 shadow-xl">
         <div className="flex items-center gap-2 text-xs font-bold text-slate-300 mb-2">
           <Radio className="w-4 h-4 text-emerald-400 animate-ping" />
-          محاكي قارئ شرائح الطوارئ (NFC Tap / QR Code / MTI Lookup):
+          قارئ بطاقة الطوارئ الذكية أو كود الهوية الطبية (NFC / QR / MTI):
         </div>
         <form
           onSubmit={(e) => {
             e.preventDefault();
             void verify(inputToken);
           }}
-          className="flex gap-2 mb-3"
+          className="flex gap-2"
         >
           <input
             dir="ltr"
             value={inputToken}
             onChange={(e) => setInputToken(e.target.value)}
-            placeholder="NFC Token or MTI-EG-2930415..."
+            placeholder="NFC Token or MTI-EG-..."
             className="flex-1 h-10 rounded-xl bg-slate-950 border border-slate-700 px-3 text-xs font-mono text-white outline-none focus:border-red-500"
           />
           <button
             type="submit"
-            className="px-4 h-10 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center gap-1.5"
+            disabled={!inputToken.trim() || loading}
+            className="px-4 h-10 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center gap-1.5 disabled:opacity-50"
           >
             <Search className="w-3.5 h-3.5" />
             قراءة الشريحة
           </button>
         </form>
-        <div className="flex flex-wrap gap-1.5">
-          {DEMO_CARDS.map((c) => (
-            <button
-              key={c.token}
-              type="button"
-              onClick={() => {
-                setInputToken(c.token);
-                void verify(c.token);
-              }}
-              className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition flex items-center gap-1 ${
-                inputToken === c.token
-                  ? "bg-red-600 text-white border-red-500"
-                  : "bg-slate-950 text-slate-300 border-slate-800 hover:border-slate-600"
-              }`}
-            >
-              <QrCode className="w-3 h-3" />
-              {c.labelAr}
-            </button>
-          ))}
-        </div>
       </div>
+
+      {!data && !loading && !error && (
+        <div className="w-full max-w-2xl bg-slate-900/90 border border-slate-800 rounded-2xl p-8 text-center shadow-xl flex flex-col items-center gap-4">
+          <ShieldAlert className="w-10 h-10 text-red-500" />
+          <div>
+            <h2 className="text-lg font-bold text-white">في انتظار مسح بطاقة NFC أو رمز الاستجابة السريع (QR)</h2>
+            <p className="text-xs text-slate-400 mt-1">
+              مرر بطاقة المريض الذكية على القارئ أو أدخل كود الهوية الطبية الموحدة (MTI) أعلاه لعرض الفصيلة والحساسية الدوائية والأمراض المزمنة فوراً.
+            </p>
+          </div>
+          <a
+            href="tel:123"
+            className="inline-flex items-center justify-center gap-2 w-full py-3.5 bg-red-600 hover:bg-red-700 text-white font-black rounded-xl text-base shadow-lg transition"
+          >
+            <Phone className="w-5 h-5" />
+            اتصال فوري بهيئة الإسعاف المصرية (123)
+          </a>
+        </div>
+      )}
 
       {loading && (
         <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl p-10 text-center">

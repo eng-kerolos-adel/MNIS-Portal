@@ -32,6 +32,8 @@ export interface QueueTicket {
   status: "waiting" | "in-consultation" | "completed" | "no-show";
   isEmergency: boolean;
   waitMinutes: number;
+  doctorId?: string;
+  doctorName?: Bilingual;
 }
 
 export interface VitalSigns {
@@ -62,6 +64,9 @@ export interface Prescription {
   patient: NationalIdentity;
   physician: Bilingual;
   physicianLicense: string;
+  verifiedBy?: Bilingual;
+  dispensedBy?: Bilingual;
+  signatureHash?: string;
   createdAt: string;
   diagnosis: Bilingual;
   icd10: string;
@@ -77,10 +82,41 @@ export interface LabSample {
   testPanel: Bilingual;
   sampleType: Bilingual;
   orderedBy: Bilingual;
+  facility?: Bilingual;
+  enteredById?: string;
+  enteredBy?: Bilingual;
+  verifiedBy?: Bilingual;
   collectedAt: string;
   priority: "routine" | "urgent" | "stat";
   status: "awaiting-collection" | "in-transit" | "received" | "processing" | "results-entered" | "verified" | "rejected";
   results?: LabResultRow[];
+}
+
+export interface PatientDocument {
+  id: string;
+  patientId: string;
+  label: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  status: "PENDING_REVIEW" | "REVIEWED";
+  createdAt: string;
+  reviewedAt?: string;
+  fileBase64?: string;
+}
+
+export interface ConditionFlagItem {
+  id: string;
+  patientId: string;
+  sampleId?: string;
+  conditionEn: string;
+  conditionAr: string;
+  conditionType: "ALLERGY" | "CHRONIC_CONDITION";
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  reviewNote?: string;
+  createdAt: string;
+  patient?: { id: string; mti: string; fullNameEn: string; fullNameAr: string };
+  flaggedBy?: { id: string; fullNameEn: string; fullNameAr: string };
+  reviewedBy?: { id: string; fullNameEn: string; fullNameAr: string } | null;
 }
 
 export interface LabResultRow {

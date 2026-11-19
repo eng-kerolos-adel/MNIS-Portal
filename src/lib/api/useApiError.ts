@@ -11,11 +11,17 @@ const MESSAGES: Record<string, { en: string; ar: string }> = {
   INVALID_STATE_TRANSITION: { en: "This step is no longer available (someone else may have acted)", ar: "هذه الخطوة لم تعد متاحة (ربما تم تنفيذها من مستخدم آخر)" },
   BED_NOT_AVAILABLE: { en: "That bed is no longer available", ar: "هذا السرير لم يعد متاحاً" },
   DUAL_SIGNOFF_REQUIRED: { en: "A different lab specialist must verify these results", ar: "يجب أن يعتمد النتائج أخصائي معمل آخر" },
+  RX_SIGNATURE_TAMPERED: { en: "Prescription digital signature verification failed", ar: "فشل التحقق من الختم الرقمي المشفر للروشتة" },
   ALREADY_EXISTS: { en: "Already exists", ar: "موجود بالفعل" },
   ACCOUNT_ALREADY_EXISTS: { en: "This citizen already has an account", ar: "هذا المواطن لديه حساب بالفعل" },
   INVALID_OR_EXPIRED_CODE: { en: "Invalid or expired code", ar: "الكود غير صحيح أو منتهي" },
   INVALID_CREDENTIALS: { en: "Incorrect ID/email or password", ar: "بيانات الدخول غير صحيحة" },
   TOO_MANY_REQUESTS: { en: "Too many attempts, try again in a minute", ar: "محاولات كثيرة، حاول بعد دقيقة" },
+  PRIMARY_AND_SECONDARY_EMAIL_MUST_DIFFER: { en: "Primary and secondary staff emails must be different", ar: "يجب اختلاف البريد الإلكتروني للموظف الأول عن الموظف الثاني" },
+  PRIMARY_EMAIL_ALREADY_EXISTS: { en: "Primary staff email is already registered", ar: "البريد الإلكتروني للموظف الأول مسجل بالفعل" },
+  SECONDARY_EMAIL_ALREADY_EXISTS: { en: "Secondary staff email is already registered", ar: "البريد الإلكتروني للموظف الثاني مسجل بالفعل" },
+  APPOINTMENT_NOT_CONFIRMED_FOR_CHECKIN: { en: "Appointment must be confirmed before clinic check-in", ar: "يجب تأكيد الموعد أولاً قبل تسجيل حضور المريض" },
+  LAB_RECEPTION_CANNOT_ENTER_OR_VERIFY_RESULTS: { en: "Lab receptionists cannot enter or verify diagnostic test results", ar: "صلاحية استقبال المعمل لا تسمح بإدخال أو اعتماد النتائج" },
 };
 
 /** Returns a handler that turns any thrown error into a localized toast. */
