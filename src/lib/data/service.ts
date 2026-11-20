@@ -255,7 +255,6 @@ export const api = {
   confirmAppointment: (id: string, body: { scheduledAt: string; doctorId?: string; note?: string }) => post<Raw>(`/appointments/${id}/confirm`, body),
   checkInAppointment: (id: string) => post<{ appointment: Raw; visit: { id: string; ticketNo: string } }>(`/appointments/${id}/check-in`),
   rejectAppointment: (id: string, note?: string) => post<Raw>(`/appointments/${id}/reject`, { note }),
-  setAppointmentStatus: (id: string, status: string) => patch<Raw>(`/appointments/${id}/status`, { status }),
 
   /* ---------------- doctor: schedule & referrals ---------------- */
   getMySchedule: () => request<Raw[]>("/schedule/my"),

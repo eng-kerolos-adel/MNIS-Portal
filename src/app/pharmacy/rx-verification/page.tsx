@@ -33,13 +33,14 @@ export default function RxVerificationPage() {
   const [checks, setChecks] = useState<Record<string, boolean>>({});
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const list = (await api.getPrescriptions()).filter((r) => r.status === "signed");
       setRx(list);
       setActiveId((cur) => (cur && list.some((r) => r.id === cur) ? cur : list[0]?.id ?? null));
-    } catch (e) { handleError(e); }
+    } catch (e) { handleError(e); } finally { setLoaded(true); }
   }, [handleError]);
   useEffect(() => { void load(); }, [load]);
 
@@ -125,7 +126,9 @@ export default function RxVerificationPage() {
               </Card>
             </>
           ) : (
-            <p className="py-10 text-center text-sm text-on-surface-variant">{t("common.loading")}</p>
+            <p className="py-10 text-center text-sm text-on-surface-variant">
+              {loaded ? (ar ? "لا توجد روشتات بانتظار المراجعة حالياً" : "No prescriptions awaiting verification") : t("common.loading")}
+            </p>
           )}
         </div>
       </div>

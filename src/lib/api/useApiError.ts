@@ -22,6 +22,14 @@ const MESSAGES: Record<string, { en: string; ar: string }> = {
   SECONDARY_EMAIL_ALREADY_EXISTS: { en: "Secondary staff email is already registered", ar: "البريد الإلكتروني للموظف الثاني مسجل بالفعل" },
   APPOINTMENT_NOT_CONFIRMED_FOR_CHECKIN: { en: "Appointment must be confirmed before clinic check-in", ar: "يجب تأكيد الموعد أولاً قبل تسجيل حضور المريض" },
   LAB_RECEPTION_CANNOT_ENTER_OR_VERIFY_RESULTS: { en: "Lab receptionists cannot enter or verify diagnostic test results", ar: "صلاحية استقبال المعمل لا تسمح بإدخال أو اعتماد النتائج" },
+  OUT_OF_FACILITY_SCOPE: { en: "This record belongs to another facility", ar: "هذا السجل يخص منشأة طبية أخرى" },
+  ER_CASE_ALREADY_CLOSED: { en: "This ER case is already admitted or discharged", ar: "حالة الطوارئ تم إغلاقها أو تسكينها بالفعل" },
+  CANNOT_DEACTIVATE_SELF: { en: "You cannot deactivate your own admin account", ar: "لا يمكنك تعطيل حسابك الإداري الحالي" },
+  INVALID_BLOOD_UNIT_STATE: { en: "This blood unit is expired or already used/discarded", ar: "كيس الدم منتهي الصلاحية أو تم استخدامه/إعدامه بالفعل" },
+  FLAG_ALREADY_REVIEWED: { en: "This clinical flag was already reviewed", ar: "تمت مراجعة هذا التنبيه السريري مسبقاً" },
+  CLAIM_ALREADY_EXISTS: { en: "An insurance claim already exists for this prescription", ar: "توجد مطالبة تأمينية مسجلة بالفعل لهذه الروشتة" },
+  ALLOWANCE_PERIOD_EXPIRED: { en: "This chronic allowance period has expired", ar: "انتهت صلاحية فترة الحصة الشهرية الحالية" },
+  NOT_YOUR_PRESCRIPTION: { en: "Only the prescribing physician can perform this action", ar: "هذا الإجراء متاح للطبيب مُصدر الروشتة فقط" },
 };
 
 /** Returns a handler that turns any thrown error into a localized toast. */

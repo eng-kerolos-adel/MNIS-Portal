@@ -92,7 +92,11 @@ export default function FraudDetectionPage() {
                   {data.rapidRefills?.map((item: any, i: number) => (
                     <div key={i} className="flex justify-between p-3 rounded-lg bg-surface-container-low text-sm">
                       <span className="font-semibold">{ar ? "طلب تجديد" : "Renewal Request"}: {item.id}</span>
-                      <span className="text-error font-bold">{ar ? "خلال 7 أيام" : "Within 7 days"}</span>
+                      <span className="text-error font-bold">
+                        {item.daysSinceIssued !== undefined
+                          ? (ar ? `خلال ${item.daysSinceIssued} يوم` : `Within ${item.daysSinceIssued}d`)
+                          : (ar ? "خلال 7 أيام" : "Within 7 days")}
+                      </span>
                     </div>
                   ))}
                 </div>
