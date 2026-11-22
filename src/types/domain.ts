@@ -15,12 +15,19 @@ export interface NationalIdentity {
   sex: Sex;
   age: number;
   bloodType: string;
+  phone?: string | null;
+  phoneVerifiedAt?: string | null;
   photoUrl: string;
+  governorate?: string | null;
+  district?: string | null;
   address: Bilingual;
   insuranceActive: boolean;
   chronicConditions: Bilingual[];
   allergies: Bilingual[];
   organDonor: boolean;
+  deletionRequestedAt?: string | null;
+  deletionReason?: string | null;
+  deletionRequestedByName?: string | null;
 }
 
 export interface QueueTicket {

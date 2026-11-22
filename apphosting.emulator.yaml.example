@@ -1,0 +1,10 @@
+# Copy to apphosting.emulator.yaml (gitignored) for local App Hosting Emulator runs
+runConfig:
+  cpu: 1
+  memoryMiB: 512
+
+env:
+  - variable: API_URL
+    value: http://127.0.0.1:3001
+  - variable: NEXT_PUBLIC_USE_FIREBASE_EMULATORS
+    value: "true"

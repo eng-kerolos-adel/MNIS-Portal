@@ -11,6 +11,7 @@ import {
   setOnUnauthorized,
   setSessionTokens,
 } from "@/lib/api/client";
+import { signOutFirebaseSession, syncFirebaseAuthSession } from "@/lib/firebase/auth-bridge";
 
 export type Role = "DOCTOR" | "PHARMACIST" | "LAB_TECH" | "HOSPITAL_STAFF" | "EXECUTIVE" | "ADMIN" | "RECEPTIONIST" | "PATIENT";
 
@@ -43,7 +44,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const clear = useCallback(() => { clearTabSession(); setUser(null); }, []);
+  const clear = useCallback(() => {
+    clearTabSession();
+    void signOutFirebaseSession();
+    setUser(null);
+  }, []);
 
   // Restore this tab's isolated session on reload (without touching other tabs' users).
   useEffect(() => {
@@ -74,6 +79,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (typeof window !== "undefined") {
               window.sessionStorage.setItem(TAB_USER_KEY, JSON.stringify(me));
             }
+            if (!me.mustChangePassword) {
+              void syncFirebaseAuthSession();
+            }
           }
         } else if (alive) {
           clearTabSession();
@@ -99,6 +107,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.sessionStorage.setItem(TAB_USER_KEY, JSON.stringify(r.user));
     }
     setUser(r.user);
+    if (!r.user.mustChangePassword) {
+      void syncFirebaseAuthSession();
+    }
     return r.user;
   }, []);
 

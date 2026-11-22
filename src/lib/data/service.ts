@@ -35,12 +35,19 @@ export function mapPatient(p: Raw): NationalIdentity {
     sex: p.sex === "MALE" ? "male" : "female",
     age: p.birthDate ? ageOf(p.birthDate) : 0,
     bloodType: p.bloodType ?? "—",
+    phone: p.phone ?? null,
+    phoneVerifiedAt: p.phoneVerifiedAt ?? null,
     photoUrl: p.photoUrl ?? avatar(p.id ?? p.mti),
+    governorate: p.governorate ?? null,
+    district: p.district ?? null,
     address: b(p.addressEn, p.addressAr),
     insuranceActive: !!p.insuranceActive,
     chronicConditions: bilingualList(p.chronicConditions),
     allergies: bilingualList(p.allergies),
     organDonor: !!p.organDonor,
+    deletionRequestedAt: p.deletionRequestedAt ?? null,
+    deletionReason: p.deletionReason ?? null,
+    deletionRequestedByName: p.deletionRequestedByName ?? null,
     // keep the id so actions can reference the patient
     ...({ id: p.id } as object),
   } as NationalIdentity;
@@ -219,8 +226,22 @@ export const api = {
   }>("/analytics/kpis"),
 
   /* ---------------- reception ---------------- */
-  openCitizenAccount: (body: { nationalId: string; fullNameEn: string; fullNameAr: string; sex: "MALE" | "FEMALE"; birthDate: string; bloodType?: string; insuranceActive?: boolean; governorate?: string; district?: string; chronicConditions?: {en:string,ar:string}[]; allergies?: {en:string,ar:string}[] }) =>
-    post<{ patientId: string; mti: string; loginId: string; temporaryPassword: string; nfcToken?: string }>("/reception/citizens", body),
+  openCitizenAccount: (body: { nationalId: string; fullNameEn: string; fullNameAr: string; sex: "MALE" | "FEMALE"; birthDate: string; bloodType?: string; phone?: string; insuranceActive?: boolean; governorate?: string; district?: string; addressAr?: string; addressEn?: string; chronicConditions?: {en:string,ar:string}[]; allergies?: {en:string,ar:string}[] }) =>
+    post<{ patientId: string; mti: string; loginId: string; phone?: string | null; temporaryPassword: string; nfcToken?: string }>("/reception/citizens", body),
+  updateCitizenPhone: (patientId: string, phone: string) =>
+    patch<{ patientId: string; phone: string | null; phoneMasked: string | null; phoneVerifiedAt: string | null }>(`/reception/citizens/${patientId}/phone`, { phone }),
+  updateCitizenAddress: (patientId: string, body: { governorate?: string; district?: string; addressAr: string; addressEn?: string }) =>
+    patch<Raw>(`/reception/citizens/${patientId}/address`, body),
+  getPendingCitizenDeletions: async () =>
+    (await request<Raw[]>("/reception/citizens/deletion-requests")).map(mapPatient),
+  requestCitizenDeletion: (patientId: string, reason: string) =>
+    post<Raw>(`/reception/citizens/${patientId}/deletion-request`, { reason }),
+  approveCitizenDeletion: (patientId: string) =>
+    post<{ deleted: boolean; patientId: string; mti: string }>(`/reception/citizens/${patientId}/deletion-approve`),
+  rejectCitizenDeletion: (patientId: string) =>
+    post<Raw>(`/reception/citizens/${patientId}/deletion-reject`),
+  sendCitizenPush: (patientId: string, body: { titleAr: string; titleEn: string; bodyAr: string; bodyEn: string }) =>
+    post<{ ok: boolean; notificationId: string; tokensCount: number; sent: number }>(`/reception/citizens/${patientId}/notify`, body),
   resetCitizenPassword: (patientId: string) => post<{ temporaryPassword: string }>(`/reception/citizens/${patientId}/reset-password`),
   getAppointments: async () =>
     (await request<Raw[]>("/appointments")).map((a) => ({

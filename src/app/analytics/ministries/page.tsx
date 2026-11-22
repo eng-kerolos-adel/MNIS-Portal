@@ -14,10 +14,18 @@ import {
   Siren,
   HeartPulse,
   ClipboardCheck,
+  Trash2,
+  XCircle,
+  CheckCircle2,
+  MapPin,
+  Phone,
 } from "lucide-react";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
+import { useToast } from "@/lib/toast/ToastProvider";
 import { useApiError } from "@/lib/api/useApiError";
-import { api } from "@/lib/data/service";
+import { api, patientId } from "@/lib/data/service";
+import type { NationalIdentity } from "@/types/domain";
+import { pick } from "@/lib/utils/format";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -28,16 +36,23 @@ import { StatCard } from "@/components/ui/StatCard";
 export default function MohpStrategicDecisionsPage() {
   const { locale } = useLocale();
   const ar = locale === "ar";
+  const { push } = useToast();
   const handleError = useApiError();
 
   const [data, setData] = useState<any>(null);
+  const [pendingDeletions, setPendingDeletions] = useState<NationalIdentity[]>([]);
+  const [delBusyId, setDelBusyId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.getQuadMinistries();
+      const [res, dels] = await Promise.all([
+        api.getQuadMinistries(),
+        api.getPendingCitizenDeletions().catch(() => []),
+      ]);
       setData(res);
+      setPendingDeletions(dels);
     } catch (e) {
       handleError(e);
     } finally {
@@ -48,6 +63,35 @@ export default function MohpStrategicDecisionsPage() {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  async function handleMinistryApproveDeletion(p: NationalIdentity) {
+    const id = patientId(p);
+    if (!window.confirm(ar ? `تأكيد الوزارة: سيتم حذف المواطن (${pick(p.fullName, locale)}) نهائياً من قاعدة البيانات الوطنية. هل تؤكد الحذف؟` : `Ministry Confirmation: permanently delete citizen (${pick(p.fullName, locale)})?`)) return;
+    setDelBusyId(id);
+    try {
+      await api.approveCitizenDeletion(id);
+      push("success", ar ? "تم تأكيد الوزارة وحذف سجل المواطن نهائياً" : "Ministry approved and permanently deleted citizen");
+      await loadData();
+    } catch (e) {
+      handleError(e);
+    } finally {
+      setDelBusyId(null);
+    }
+  }
+
+  async function handleMinistryRejectDeletion(p: NationalIdentity) {
+    const id = patientId(p);
+    setDelBusyId(id);
+    try {
+      await api.rejectCitizenDeletion(id);
+      push("info", ar ? "تم رفض طلب الحذف والإبقاء على سجل المواطن" : "Deletion request rejected");
+      await loadData();
+    } catch (e) {
+      handleError(e);
+    } finally {
+      setDelBusyId(null);
+    }
+  }
 
   const mohp = data?.mohp;
   const metrics = mohp?.liveDbMetrics;
@@ -326,6 +370,88 @@ export default function MohpStrategicDecisionsPage() {
           </div>
         </div>
       )}
+
+      {/* Pending Citizen Deletion Requests — Ministry Confirmation */}
+      <Card className="border-error/30">
+        <CardHeader className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2">
+            <Trash2 className="h-5 w-5 text-error" />
+            {ar
+              ? `طلبات حذف المواطنين بانتظار تأكيد واعتماد وزارة الصحة (${pendingDeletions.length})`
+              : `Citizen Deletion Requests — Pending Ministry Confirmation (${pendingDeletions.length})`}
+          </CardTitle>
+          <Badge tone={pendingDeletions.length > 0 ? "warning" : "neutral"}>
+            {pendingDeletions.length > 0
+              ? (ar ? "يتطلب اعتماد الوزارة" : "Action Required")
+              : (ar ? "لا توجد طلبات معلّقة" : "No Pending Requests")}
+          </Badge>
+        </CardHeader>
+        <CardContent>
+          {pendingDeletions.length === 0 ? (
+            <p className="text-xs text-on-surface-variant py-3">
+              {ar
+                ? "لا توجد طلبات حذف مواطنين معلّقة حالياً. أي طلب حذف يُرسل من مكتب الاستقبال يظهر هنا لاعتماده أو رفضه."
+                : "No pending citizen deletion requests. Any request submitted from Reception appears here for Ministry review."}
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {pendingDeletions.map((p) => {
+                const id = patientId(p);
+                const addrText = [p.governorate, p.district, pick(p.address, locale)].filter(Boolean).join(" — ");
+                return (
+                  <div key={id} className="rounded-xl border border-error/30 bg-error/5 p-3.5 flex flex-col gap-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-bold text-on-surface">{pick(p.fullName, locale)}</p>
+                        <p className="text-xs font-mono text-primary">{p.mti} • {p.nationalId}</p>
+                      </div>
+                      <Badge tone="warning">{ar ? "بانتظار الوزارة" : "Pending Ministry"}</Badge>
+                    </div>
+                    <div className="text-xs text-on-surface-variant space-y-1">
+                      <p className="flex items-center gap-1.5" dir="ltr">
+                        <Phone className="w-3.5 h-3.5 shrink-0" />
+                        <span>{p.phone ?? "—"}</span>
+                      </p>
+                      <p className="flex items-start gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                        <span>{addrText || "—"}</span>
+                      </p>
+                      <p className="font-semibold text-error">
+                        {ar ? "سبب الحذف:" : "Reason:"} {p.deletionReason}
+                      </p>
+                      {p.deletionRequestedByName && (
+                        <p className="text-[11px]">
+                          {ar ? "مُقدّم الطلب:" : "Requested by:"} {p.deletionRequestedByName}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-error/20">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={delBusyId === id}
+                        icon={<XCircle className="w-3.5 h-3.5" />}
+                        onClick={() => handleMinistryRejectDeletion(p)}
+                      >
+                        {ar ? "رفض الطلب" : "Reject"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        loading={delBusyId === id}
+                        icon={<CheckCircle2 className="w-3.5 h-3.5" />}
+                        onClick={() => handleMinistryApproveDeletion(p)}
+                      >
+                        {ar ? "تأكيد واعتماد الحذف النهائي" : "Confirm & Delete Permanently"}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

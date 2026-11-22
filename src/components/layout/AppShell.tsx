@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth/AuthProvider";
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { Footer } from "./Footer";
+import { RemoteConfigBanner } from "./RemoteConfigBanner";
 import { portalNav, portalMeta, homeFor, ROLE_PORTAL, type PortalKey } from "@/lib/nav";
 
 const FACILITY: Record<PortalKey, { en: string; ar: string }> = {
@@ -113,6 +114,7 @@ export function AppShell({ portal, children }: { portal: PortalKey; children: Re
           staffRole={roleLabel}
           onMenu={() => setMobileOpen(true)}
         />
+        <RemoteConfigBanner />
         <main className="mx-auto w-full max-w-[1440px] flex-1 p-4 sm:p-6">{children}</main>
         <Footer />
       </div>

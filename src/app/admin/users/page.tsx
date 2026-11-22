@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { UsersRound, UserPlus, KeyRound, Power, ShieldCheck, Lock, Database, Activity, FileSpreadsheet, RefreshCw, Building2, Stethoscope, FlaskConical, Hospital as HospitalIcon, Copy, CheckCircle2 } from "lucide-react";
+import { UsersRound, UserPlus, KeyRound, Power, ShieldCheck, Lock, Database, Activity, FileSpreadsheet, RefreshCw, Building2, Stethoscope, FlaskConical, Hospital as HospitalIcon, Copy, CheckCircle2, Trash2, XCircle, MapPin, Phone } from "lucide-react";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { useToast } from "@/lib/toast/ToastProvider";
 import { useApiError } from "@/lib/api/useApiError";
 import { useAuth } from "@/lib/auth/AuthProvider";
-import { api } from "@/lib/data/service";
+import { api, patientId } from "@/lib/data/service";
+import type { NationalIdentity } from "@/types/domain";
+import { pick } from "@/lib/utils/format";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -91,23 +93,27 @@ export default function StaffUsersPage() {
     facilityAr: "",
   });
   const [sessionsCount, setSessionsCount] = useState<number>(0);
+  const [pendingDeletions, setPendingDeletions] = useState<NationalIdentity[]>([]);
+  const [delBusyId, setDelBusyId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [pw, setPw] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [uList, facList, logs, pos, sessions] = await Promise.all([
+      const [uList, facList, logs, pos, sessions, dels] = await Promise.all([
         api.listUsers(),
         api.getFacilities().catch(() => []),
         api.getAuditLogs().catch(() => []),
         api.getSecurityPosture().catch(() => null),
         api.getActiveSessions().catch(() => []),
+        api.getPendingCitizenDeletions().catch(() => []),
       ]);
       setUsers(uList);
       setFacilities(facList);
       setAuditLogs(logs);
       setPosture(pos);
       setSessionsCount(sessions.length);
+      setPendingDeletions(dels);
     } catch (e) {
       handleError(e);
     }
@@ -249,6 +255,35 @@ export default function StaffUsersPage() {
     }
   }
 
+  async function handleMinistryApproveDeletion(p: NationalIdentity) {
+    const id = patientId(p);
+    if (!window.confirm(ar ? `تأكيد الوزارة: سيتم حذف المواطن (${pick(p.fullName, locale)}) وسجله الطبي نهائياً. هل أنت متأكد؟` : `Ministry Confirmation: permanently delete citizen (${pick(p.fullName, locale)})?`)) return;
+    setDelBusyId(id);
+    try {
+      await api.approveCitizenDeletion(id);
+      push("success", ar ? "تم تأكيد الوزارة وحذف سجل المواطن نهائياً" : "Citizen permanently deleted with Ministry confirmation");
+      await load();
+    } catch (e) {
+      handleError(e);
+    } finally {
+      setDelBusyId(null);
+    }
+  }
+
+  async function handleMinistryRejectDeletion(p: NationalIdentity) {
+    const id = patientId(p);
+    setDelBusyId(id);
+    try {
+      await api.rejectCitizenDeletion(id);
+      push("info", ar ? "تم رفض طلب الحذف والإبقاء على سجل المواطن" : "Deletion request rejected");
+      await load();
+    } catch (e) {
+      handleError(e);
+    } finally {
+      setDelBusyId(null);
+    }
+  }
+
   const filteredLogs = auditLogs.filter((l) => resourceFilter === "ALL" || (l.resourceType ?? "SYSTEM") === resourceFilter);
   const filteredFacilities = facilities.filter((fac) => facilityFilter === "ALL" || fac.facilityType === facilityFilter);
 
@@ -346,6 +381,88 @@ export default function StaffUsersPage() {
           </p>
         </Card>
       </div>
+
+      {/* Pending Citizen Deletion Requests (Ministry Confirmation) */}
+      <Card className="border-error/30">
+        <CardHeader className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2">
+            <Trash2 className="h-4 w-4 text-error" />
+            {ar
+              ? `طلبات حذف المواطنين بانتظار تأكيد واعتماد الوزارة (${pendingDeletions.length})`
+              : `Citizen Deletion Requests — Pending Ministry Confirmation (${pendingDeletions.length})`}
+          </CardTitle>
+          <Badge tone={pendingDeletions.length > 0 ? "warning" : "neutral"}>
+            {pendingDeletions.length > 0
+              ? (ar ? "يتطلب تأكيد الوزارة" : "Action Required")
+              : (ar ? "لا توجد طلبات معلّقة" : "No Pending Requests")}
+          </Badge>
+        </CardHeader>
+        <CardContent>
+          {pendingDeletions.length === 0 ? (
+            <p className="text-xs text-on-surface-variant py-2">
+              {ar
+                ? "لا توجد طلبات حذف مواطنين معلّقة حالياً."
+                : "No pending citizen deletion requests."}
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {pendingDeletions.map((p) => {
+                const id = patientId(p);
+                const addrText = [p.governorate, p.district, pick(p.address, locale)].filter(Boolean).join(" — ");
+                return (
+                  <div key={id} className="rounded-xl border border-error/30 bg-error/5 p-3.5 flex flex-col gap-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-sm font-bold text-on-surface">{pick(p.fullName, locale)}</p>
+                        <p className="text-xs font-mono text-primary">{p.mti} • {p.nationalId}</p>
+                      </div>
+                      <Badge tone="warning">{ar ? "بانتظار التأكيد" : "Pending"}</Badge>
+                    </div>
+                    <div className="text-xs text-on-surface-variant space-y-1">
+                      <p className="flex items-center gap-1.5" dir="ltr">
+                        <Phone className="w-3.5 h-3.5 shrink-0" />
+                        <span>{p.phone ?? "—"}</span>
+                      </p>
+                      <p className="flex items-start gap-1.5">
+                        <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                        <span>{addrText || "—"}</span>
+                      </p>
+                      <p className="font-semibold text-error">
+                        {ar ? "سبب الطلب:" : "Reason:"} {p.deletionReason}
+                      </p>
+                      {p.deletionRequestedByName && (
+                        <p className="text-[11px]">
+                          {ar ? "مُقدّم الطلب:" : "By:"} {p.deletionRequestedByName}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-error/20">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={delBusyId === id}
+                        icon={<XCircle className="w-3.5 h-3.5" />}
+                        onClick={() => handleMinistryRejectDeletion(p)}
+                      >
+                        {ar ? "رفض الطلب" : "Reject Request"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        loading={delBusyId === id}
+                        icon={<CheckCircle2 className="w-3.5 h-3.5" />}
+                        onClick={() => handleMinistryApproveDeletion(p)}
+                      >
+                        {ar ? "تأكيد واعتماد الحذف النهائي" : "Confirm & Delete Permanently"}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Nationwide Registered Medical Facilities Directory */}
       <Card>

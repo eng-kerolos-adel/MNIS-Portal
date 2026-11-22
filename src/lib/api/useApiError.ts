@@ -30,6 +30,16 @@ const MESSAGES: Record<string, { en: string; ar: string }> = {
   CLAIM_ALREADY_EXISTS: { en: "An insurance claim already exists for this prescription", ar: "توجد مطالبة تأمينية مسجلة بالفعل لهذه الروشتة" },
   ALLOWANCE_PERIOD_EXPIRED: { en: "This chronic allowance period has expired", ar: "انتهت صلاحية فترة الحصة الشهرية الحالية" },
   NOT_YOUR_PRESCRIPTION: { en: "Only the prescribing physician can perform this action", ar: "هذا الإجراء متاح للطبيب مُصدر الروشتة فقط" },
+  INVALID_PHONE_NUMBER: { en: "Invalid Egyptian/E.164 mobile number (e.g. 01012345678)", ar: "رقم الهاتف غير صالح (مثال: 01012345678)" },
+  NO_PHONE_REGISTERED: { en: "No mobile number is registered for this citizen yet", ar: "لا يوجد رقم هاتف مسجل لهذا المواطن بعد" },
+  PHONE_MISMATCH: { en: "Verified SMS phone does not match the reception-registered number", ar: "الرقم الذي تم التحقق منه لا يطابق رقم الهاتف المسجل لدى الاستقبال" },
+  INVALID_FIREBASE_TOKEN: { en: "Invalid or expired SMS verification token", ar: "رمز تأكيد الهاتف غير صالح أو منتهي الصلاحية" },
+  FIREBASE_NOT_CONFIGURED: { en: "Firebase service is not configured on the server", ar: "خدمة Firebase غير مفعلة على الخادم حالياً" },
+  FIREBASE_CUSTOM_TOKEN_UNAVAILABLE: { en: "Firebase custom token minting is not enabled", ar: "خدمة المزامنة اللحظية لـ Firebase غير مفعلة حالياً" },
+  PHONE_ALREADY_USED: { en: "This mobile number is already registered to another citizen", ar: "رقم الهاتف مسجّل بالفعل لمواطن آخر في المنظومة — لا يمكن تكرار رقم الهاتف" },
+  PHONE_VERIFICATION_REQUIRED: { en: "Citizen must confirm their mobile number via SMS first", ar: "يجب على المواطن تأكيد رقم هاتفه عبر رسالة SMS أولاً" },
+  NO_ACCOUNT_FOR_PATIENT: { en: "Citizen does not have a mobile account yet", ar: "المواطن لا يملك حساب تطبيق حتى الآن" },
+  NO_DELETION_REQUEST_PENDING: { en: "No pending deletion request exists for this citizen", ar: "لا يوجد طلب حذف معلّق لهذا المواطن" },
 };
 
 /** Returns a handler that turns any thrown error into a localized toast. */

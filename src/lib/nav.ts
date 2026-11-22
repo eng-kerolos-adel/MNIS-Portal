@@ -65,7 +65,8 @@ export const portalNav: Record<PortalKey, NavItem[]> = {
     { href: "/analytics/reports", icon: FileBarChart, labelKey: "nav.analytics.reports", live: true },
   ],
   reception: [
-    { href: "/reception/citizens", icon: UserPlus, labelKey: "nav.reception.citizens", live: true },
+    { href: "/reception/citizens", icon: Users, labelKey: "nav.reception.citizens", live: true },
+    { href: "/reception/register", icon: UserPlus, labelKey: "nav.reception.register", live: true },
   ],
   admin: [
     { href: "/admin/users", icon: UsersRound, labelKey: "nav.admin.users", live: true },

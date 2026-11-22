@@ -27,13 +27,21 @@ import {
   Printer,
   CheckCircle2,
   Eye,
+  Search,
+  Loader2,
+  RefreshCw,
+  Globe,
 } from "lucide-react";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { useToast } from "@/lib/toast/ToastProvider";
 import { useApiError } from "@/lib/api/useApiError";
 import { api, patientId, rxCode } from "@/lib/data/service";
 import type { LabSample, Medication, NationalIdentity, PatientDocument, Prescription, QueueTicket } from "@/types/domain";
-import { medicationSeed } from "@/lib/data/medicationSeed";
+import {
+  searchMedicationsLiveWithMeta,
+  type DrugCatalogItem,
+  type LiveMedicationSearchResult,
+} from "@/lib/data/medicationSeed";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -90,16 +98,99 @@ export default function ConsultationPage() {
   const [targetHospitalId, setTargetHospitalId] = useState("");
 
   const [medModalOpen, setMedModalOpen] = useState(false);
+  const [medSearchQuery, setMedSearchQuery] = useState("");
+  const [medSearchResults, setMedSearchResults] = useState<DrugCatalogItem[]>([]);
+  const [medMeta, setMedMeta] = useState<Omit<LiveMedicationSearchResult, "items"> | null>(null);
+  const [medPage, setMedPage] = useState(1);
+  const [medLoadingMore, setMedLoadingMore] = useState(false);
+  const [medSyncVersion, setMedSyncVersion] = useState(0);
+  const [medForceNext, setMedForceNext] = useState(false);
+  const [medSearching, setMedSearching] = useState(false);
+  const [pharmacyStock, setPharmacyStock] = useState<any[]>([]);
   const [newMed, setNewMed] = useState({
-    nameEn: "Amoxicillin",
-    nameAr: "أموكسيسيلين",
-    dose: "500mg",
-    formEn: "Capsule",
-    freqEn: "Every 8 hours",
+    nameEn: "",
+    nameAr: "",
+    dose: "",
+    formEn: "Tablet",
+    freqEn: "Every 12 hours",
     days: 7,
-    qty: 2,
+    qty: 14,
     isChronic: false,
   });
+
+  useEffect(() => {
+    if (me?.role === "PHARMACIST" || me?.role === "ADMIN" || me?.role === "EXECUTIVE") {
+      void api.getPharmacyInventory().then(setPharmacyStock).catch(() => setPharmacyStock([]));
+    }
+  }, [me?.role]);
+
+  useEffect(() => {
+    if (!medModalOpen) return;
+    const ctrl = new AbortController();
+    const forceNow = medForceNext;
+    if (forceNow) setMedForceNext(false);
+    setMedSearching(true);
+    setMedPage(1);
+    const timer = setTimeout(() => {
+      void searchMedicationsLiveWithMeta(medSearchQuery, {
+        page: 1,
+        limit: 25,
+        forceRefresh: forceNow,
+        pharmacyInventory: pharmacyStock,
+        signal: ctrl.signal,
+      })
+        .then((res) => {
+          if (!ctrl.signal.aborted) {
+            setMedSearchResults(res.items);
+            setMedMeta({
+              totalAvailable: res.totalAvailable,
+              totalMatches: res.totalMatches,
+              page: res.page,
+              hasMore: res.hasMore,
+              syncedAt: res.syncedAt,
+              activeSources: res.activeSources,
+            });
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (!ctrl.signal.aborted) setMedSearching(false);
+        });
+    }, medSearchQuery.trim() && !forceNow ? 260 : 0);
+    return () => {
+      clearTimeout(timer);
+      ctrl.abort();
+    };
+  }, [medSearchQuery, medModalOpen, pharmacyStock, medSyncVersion, medForceNext]);
+
+  async function loadMoreMedications() {
+    if (medLoadingMore || !medMeta?.hasMore) return;
+    const nextPage = medPage + 1;
+    setMedLoadingMore(true);
+    try {
+      const res = await searchMedicationsLiveWithMeta(medSearchQuery, {
+        page: nextPage,
+        limit: 25,
+        pharmacyInventory: pharmacyStock,
+      });
+      setMedPage(nextPage);
+      setMedSearchResults((prev) => {
+        const seen = new Set(prev.map((x) => `${x.name.en}__${x.dose}__${x.source ?? ""}`));
+        const extra = res.items.filter((x) => !seen.has(`${x.name.en}__${x.dose}__${x.source ?? ""}`));
+        return [...prev, ...extra];
+      });
+      setMedMeta({
+        totalAvailable: res.totalAvailable,
+        totalMatches: res.totalMatches,
+        page: res.page,
+        hasMore: res.hasMore,
+        syncedAt: res.syncedAt,
+        activeSources: res.activeSources,
+      });
+    } finally {
+      setMedLoadingMore(false);
+    }
+  }
 
   const loadPatientHistory = useCallback(async (pid: string) => {
     try {
@@ -1101,64 +1192,185 @@ export default function ConsultationPage() {
 
       {medModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <Card className="w-full max-w-md">
-            <CardHeader>
-              <CardTitle>{ar ? "إضافة دواء للروشتة" : "Add Medication"}</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              <select
-                className={input}
-                onChange={(e) => {
-                  const found = medicationSeed.find((s) => s.name.en === e.target.value);
-                  if (found) {
-                    setNewMed({
-                      nameEn: found.name.en,
-                      nameAr: found.name.ar,
-                      dose: found.dose,
-                      formEn: found.form.en,
-                      freqEn: found.frequency.en,
-                      days: found.durationDays,
-                      qty: found.quantity,
-                      isChronic: found.durationDays >= 30,
-                    });
-                  }
-                }}
-              >
-                <option value="">
+          <Card className="w-full max-w-2xl max-h-[92vh] flex flex-col overflow-hidden">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex flex-wrap items-center justify-between gap-2">
+                <span className="flex items-center gap-2">
+                  <Pill className="h-5 w-5 text-secondary" />
+                  {ar ? "إضافة دواء للروشتة — متصل حياً بدليل الدواء المصري والعالمي" : "Add Medication — Live Egyptian & Global Drug API"}
+                </span>
+                <div className="flex items-center gap-2">
+                  <Badge tone="secondary">
+                    {ar ? "API الدواء المصري + NIH + OpenFDA" : "Egypt Drug API + NIH + OpenFDA"}
+                  </Badge>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={medSearching}
+                    onClick={() => {
+                      setMedForceNext(true);
+                      setMedSyncVersion((v) => v + 1);
+                    }}
+                    icon={<RefreshCw className={`h-3.5 w-3.5 ${medSearching ? "animate-spin" : ""}`} />}
+                  >
+                    {ar ? "تحديث حي" : "Live Sync"}
+                  </Button>
+                </div>
+              </CardTitle>
+              <div className="mt-1.5 rounded-lg border border-secondary/30 bg-secondary/5 px-3 py-1.5 text-[11px] flex flex-wrap items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 font-semibold text-on-surface">
+                  <Globe className={`h-3.5 w-3.5 text-secondary ${medSearching ? "animate-spin" : ""}`} />
                   {ar
-                    ? "— اختر من الدليل الدوائي المصري أو اكتب أدناه —"
-                    : "— Pick from Egyptian Drug Formulary or type below —"}
-                </option>
-                {medicationSeed.map((s, idx) => (
-                  <option key={idx} value={s.name.en}>
-                    {s.name.en} ({s.name.ar}) — {s.dose}
-                  </option>
-                ))}
-              </select>
-              <input
-                className={input}
-                value={newMed.nameEn}
-                placeholder={ar ? "اسم الدواء (EN)" : "Medication Name (EN)"}
-                onChange={(e) => setNewMed({ ...newMed, nameEn: e.target.value })}
-              />
-              <input
-                className={input}
-                value={newMed.nameAr}
-                placeholder={ar ? "اسم الدواء (AR)" : "Medication Name (AR)"}
-                onChange={(e) => setNewMed({ ...newMed, nameAr: e.target.value })}
-              />
-              <input
-                className={input}
-                value={newMed.dose}
-                placeholder={ar ? "الجرعة (مثال 500mg)" : "Dose (e.g. 500mg)"}
-                onChange={(e) => setNewMed({ ...newMed, dose: e.target.value })}
-              />
-              <input
-                className={input}
-                value={newMed.formEn}
-                placeholder={ar ? "الشكل الدوائي (Tablet/Capsule)" : "Form (e.g. Tablet)"}
-                onChange={(e) => setNewMed({ ...newMed, formEn: e.target.value })}
-              />
+                    ? `متزامن حياً: ${(medMeta?.totalAvailable ?? 27617).toLocaleString()}+ دواء مصري • المطابق للبحث: ${(medMeta?.totalMatches ?? medSearchResults.length).toLocaleString()} دواء`
+                    : `Live Synced: ${(medMeta?.totalAvailable ?? 27617).toLocaleString()}+ Egyptian Drugs • Matches: ${(medMeta?.totalMatches ?? medSearchResults.length).toLocaleString()}`}
+                </span>
+                {medMeta?.syncedAt && (
+                  <span className="text-on-surface-variant">
+                    {ar ? "آخر مزامنة:" : "Synced:"} {new Date(medMeta.syncedAt).toLocaleTimeString(ar ? "ar-EG" : "en-US")}
+                  </span>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3 overflow-y-auto pt-2">
+              <div className="relative">
+                <Search className="h-4 w-4 absolute top-3 start-3 text-on-surface-variant" />
+                <input
+                  className="h-10 w-full rounded-lg bg-surface-container-low ps-9 pe-9 text-sm outline-none ring-1 ring-outline-variant/40 focus:ring-2 focus:ring-secondary"
+                  placeholder={
+                    ar
+                      ? "ابحث عن أي دواء في مصر (اسم تجاري / مادة فعالة / عربي أو إنجليزي / باركود / داعي استعمال)..."
+                      : "Search all 27,617+ Egyptian drugs (Brand, Generic, Arabic/English, Barcode, Indication)..."
+                  }
+                  value={medSearchQuery}
+                  onChange={(e) => setMedSearchQuery(e.target.value)}
+                  autoFocus
+                />
+                {medSearching && (
+                  <Loader2 className="h-4 w-4 animate-spin absolute top-3 end-3 text-secondary" />
+                )}
+              </div>
+
+              <div className="max-h-60 overflow-y-auto rounded-lg border border-outline-variant/40 divide-y divide-outline-variant/30 bg-surface-container-lowest">
+                {medSearchResults.length === 0 ? (
+                  <p className="p-4 text-center text-xs text-on-surface-variant">
+                    {medSearching
+                      ? ar
+                        ? "جاري البحث المباشر في API الدواء المصري (27,617+ دواء) و NIH RxNorm و OpenFDA..."
+                        : "Querying Live Egyptian Drug API (27,617+ drugs), NIH RxNorm & OpenFDA..."
+                      : ar
+                        ? "لا توجد نتائج مطابقة — يمكنك كتابة اسم الدواء يدوياً أدناه."
+                        : "No matches — enter custom medication details below."}
+                  </p>
+                ) : (
+                  <>
+                    {medSearchResults.map((item, idx) => {
+                      const selected = newMed.nameEn === item.name.en && newMed.dose === item.dose;
+                      const srcLabel =
+                        item.source === "PHARMACY_INVENTORY"
+                          ? ar
+                            ? "مخزون الصيدلية"
+                            : "Pharmacy"
+                          : item.source === "RXNORM_NIH"
+                            ? "NIH RxNorm"
+                            : item.source === "OPENFDA"
+                              ? "OpenFDA"
+                              : ar
+                                ? "API الدواء المصري"
+                                : "Egypt Drug API";
+                      return (
+                        <button
+                          key={`${item.name.en}-${item.dose}-${item.barcode ?? idx}-${idx}`}
+                          type="button"
+                          onClick={() =>
+                            setNewMed({
+                              nameEn: item.name.en,
+                              nameAr: item.name.ar,
+                              dose: item.dose,
+                              formEn: item.form.en,
+                              freqEn: item.frequency.en,
+                              days: item.durationDays,
+                              qty: item.quantity,
+                              isChronic: item.durationDays >= 30,
+                            })
+                          }
+                          className={`w-full text-start px-3 py-2 flex items-start justify-between gap-2 transition hover:bg-secondary/10 ${selected ? "bg-secondary/15" : ""}`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-on-surface truncate">
+                              {ar ? `${item.name.ar} — ${item.name.en}` : `${item.name.en} (${item.name.ar})`}
+                            </p>
+                            <p className="text-[11px] text-on-surface-variant truncate">
+                              {item.genericName ? `${item.genericName} • ` : ""}
+                              {item.dose} • {ar ? item.form.ar : item.form.en}
+                              {item.manufacturer ? ` • ${item.manufacturer}` : ""}
+                              {item.unitPrice > 0 ? ` • ${item.unitPrice} ${ar ? "ج.م" : "EGP"}` : ""}
+                            </p>
+                            {item.indicationsAr && (
+                              <p className="text-[10px] text-on-surface-variant/80 truncate mt-0.5">
+                                {item.indicationsAr}
+                              </p>
+                            )}
+                          </div>
+                          <Badge
+                            tone={
+                              item.source === "PHARMACY_INVENTORY"
+                                ? "success"
+                                : item.source === "EG_DRUGS_LIVE_API"
+                                  ? "primary"
+                                  : "secondary"
+                            }
+                          >
+                            {srcLabel}
+                          </Badge>
+                        </button>
+                      );
+                    })}
+                    {medMeta?.hasMore && (
+                      <div className="p-2 flex justify-center bg-surface-container-low/50">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          loading={medLoadingMore}
+                          onClick={() => void loadMoreMedications()}
+                        >
+                          {ar
+                            ? `تحميل المزيد من نتائج API الدواء المصري (${medSearchResults.length} / ${medMeta.totalMatches})`
+                            : `Load More Live Results (${medSearchResults.length} / ${medMeta.totalMatches})`}
+                        </Button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                <input
+                  className={input}
+                  value={newMed.nameEn}
+                  placeholder={ar ? "اسم الدواء (EN)" : "Medication Name (EN)"}
+                  onChange={(e) => setNewMed({ ...newMed, nameEn: e.target.value })}
+                />
+                <input
+                  className={input}
+                  value={newMed.nameAr}
+                  placeholder={ar ? "اسم الدواء (AR)" : "Medication Name (AR)"}
+                  onChange={(e) => setNewMed({ ...newMed, nameAr: e.target.value })}
+                />
+                <input
+                  className={input}
+                  value={newMed.dose}
+                  placeholder={ar ? "الجرعة (مثال 500mg)" : "Dose (e.g. 500mg)"}
+                  onChange={(e) => setNewMed({ ...newMed, dose: e.target.value })}
+                />
+                <input
+                  className={input}
+                  value={newMed.formEn}
+                  placeholder={ar ? "الشكل الدوائي (Tablet/Capsule)" : "Form (e.g. Tablet)"}
+                  onChange={(e) => setNewMed({ ...newMed, formEn: e.target.value })}
+                />
+              </div>
               <input
                 className={input}
                 value={newMed.freqEn}
@@ -1166,27 +1378,33 @@ export default function ConsultationPage() {
                 onChange={(e) => setNewMed({ ...newMed, freqEn: e.target.value })}
               />
               <div className="flex gap-2">
-                <input
-                  type="number"
-                  className={input}
-                  value={newMed.days}
-                  placeholder={ar ? "أيام" : "Days"}
-                  onChange={(e) => setNewMed({ ...newMed, days: +e.target.value })}
-                />
-                <input
-                  type="number"
-                  className={input}
-                  value={newMed.qty}
-                  placeholder={ar ? "الكمية" : "Qty"}
-                  onChange={(e) => setNewMed({ ...newMed, qty: +e.target.value })}
-                />
+                <label className="flex-1 flex flex-col gap-1 text-[11px] font-semibold">
+                  {ar ? "عدد الأيام" : "Days"}
+                  <input
+                    type="number"
+                    min={1}
+                    className={input}
+                    value={newMed.days}
+                    onChange={(e) => setNewMed({ ...newMed, days: Math.max(1, +e.target.value || 1) })}
+                  />
+                </label>
+                <label className="flex-1 flex flex-col gap-1 text-[11px] font-semibold">
+                  {ar ? "الكمية (أقراص/عبوات)" : "Quantity"}
+                  <input
+                    type="number"
+                    min={1}
+                    className={input}
+                    value={newMed.qty}
+                    onChange={(e) => setNewMed({ ...newMed, qty: Math.max(1, +e.target.value || 1) })}
+                  />
+                </label>
               </div>
-              <div className="flex justify-end gap-2 mt-4">
+              <div className="flex justify-end gap-2 mt-2">
                 <Button variant="outline" onClick={() => setMedModalOpen(false)}>
                   {ar ? "إلغاء" : "Cancel"}
                 </Button>
-                <Button onClick={addMedication} disabled={!newMed.nameEn}>
-                  {ar ? "إضافة" : "Add"}
+                <Button onClick={addMedication} disabled={!newMed.nameEn.trim()}>
+                  {ar ? "إضافة للروشتة" : "Add to Prescription"}
                 </Button>
               </div>
             </CardContent>
