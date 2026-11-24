@@ -2,34 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  ShieldCheck,
-  Headset,
-  Stethoscope,
-  Pill,
-  FlaskConical,
-  Hospital,
-  BarChart3,
-  UserCheck,
-  Shield,
-  Siren,
-} from "lucide-react";
+import { ShieldCheck, Headset } from "lucide-react";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { cn } from "@/lib/utils/cn";
 import type { NavItem } from "@/lib/nav";
-
-const SECTOR_LINKS = [
-  { href: "/doctor/queue", icon: Stethoscope, ar: "العيادة والطبيب", en: "Doctor" },
-  { href: "/pharmacy/dispensing-queue", icon: Pill, ar: "الصيدلية", en: "Pharmacy" },
-  { href: "/lab/sample-intake", icon: FlaskConical, ar: "المعمل والأشعة", en: "Lab & PACS" },
-  { href: "/hospital/er-triage", icon: Hospital, ar: "المستشفى والطوارئ", en: "Hospital & ER" },
-  { href: "/reception/citizens", icon: UserCheck, ar: "الاستقبال والمواطنين", en: "Reception" },
-  { href: "/analytics/ministries", icon: BarChart3, ar: "استراتيجية وزارة الصحة", en: "MoHP Strategy" },
-  { href: "/admin/users", icon: Shield, ar: "الأمن والإدارة", en: "Admin & SOC" },
-  { href: "/emergency", icon: Siren, ar: "طوارئ NFC", en: "NFC Emergency" },
-  { href: "/presentation", icon: ShieldCheck, ar: "العرض الشامل والفلو", en: "Presentation & Flows" },
-];
 
 export function Sidebar({
   items,
@@ -46,7 +23,6 @@ export function Sidebar({
   const { t, locale } = useLocale();
   const { user } = useAuth();
   const ar = locale === "ar";
-  const showSectorSwitcher = !user || user.role === "ADMIN" || user.role === "EXECUTIVE";
 
   return (
     <>
@@ -90,43 +66,17 @@ export function Sidebar({
             })}
           </nav>
 
-          {/* Sovereign Cross-Sector Switcher (Admin / Executive) vs Strict Facility Isolation Card (Staff) */}
-          {showSectorSwitcher ? (
-            <div className="mx-2 mt-1 border-t border-outline-variant/40 pt-2 pb-2">
-              <p className="px-2 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
-                {ar ? "التنقل السريع بين قطاعات المنظومة" : "Sovereign Sector Switcher"}
-              </p>
-              <div className="grid grid-cols-2 gap-1">
-                {SECTOR_LINKS.map((sec) => {
-                  const Icon = sec.icon;
-                  const activeSector = pathname.startsWith("/" + sec.href.split("/")[1]);
-                  return (
-                    <Link
-                      key={sec.href}
-                      href={sec.href}
-                      onClick={onClose}
-                      className={cn(
-                        "flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition-colors",
-                        activeSector
-                          ? "bg-secondary-container text-on-secondary-container font-bold"
-                          : "bg-surface-container-low/60 text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
-                      )}
-                    >
-                      <Icon className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate">{ar ? sec.ar : sec.en}</span>
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          ) : (
+          {/* Strict Facility & Role Scope Isolation Card */}
+          {user && (
             <div className="mx-2 mt-2 border-t border-outline-variant/40 pt-3 pb-2">
               <div className="rounded-xl border border-primary/20 bg-primary/5 p-3 space-y-1.5">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-primary">
-                  {ar ? "المنشأة الطبية التابع لها" : "Assigned Medical Facility"}
+                  {user.role === "ADMIN" || user.role === "EXECUTIVE"
+                    ? (ar ? "النطاق الإداري المخصص" : "Assigned Sovereign Scope")
+                    : (ar ? "المنشأة الطبية التابع لها" : "Assigned Medical Facility")}
                 </p>
                 <p className="text-xs font-bold text-on-surface leading-snug">
-                  {(ar ? user.facilityAr : user.facilityEn) || (ar ? "منشأة طبية معتمدة بالشبكة" : "Registered National Facility")}
+                  {(ar ? user.facilityAr : user.facilityEn) || (ar ? "منظومة الهوية الطبية الموحدة" : "Unified MNIS Facility")}
                 </p>
                 {(user.specialityAr || user.specialityEn) && (
                   <p className="text-[11px] text-secondary font-semibold">
@@ -140,8 +90,8 @@ export function Sidebar({
                 )}
                 <p className="text-[10px] text-on-surface-variant pt-0.5">
                   {ar
-                    ? "الوصول مقصور على مهام وصلاحيات هذه المنشأة فقط."
-                    : "Access strictly scoped to this facility & role."}
+                    ? "الوصول مقصور على مهام وصلاحيات حسابك فقط."
+                    : "Access strictly scoped to your assigned role & portal."}
                 </p>
               </div>
             </div>

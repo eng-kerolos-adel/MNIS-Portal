@@ -22,6 +22,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { CredentialModal } from "@/components/ui/CredentialModal";
+import { WebcamCapture } from "@/components/ui/WebcamCapture";
 
 const field =
   "h-11 w-full rounded-lg bg-surface-container-low px-3 text-sm outline-none focus:ring-2 focus:ring-secondary/50";
@@ -49,6 +50,7 @@ export default function RegisterCitizenPage() {
     sex: "MALE" as "MALE" | "FEMALE",
     birthDate: "",
     bloodType: "",
+    photoUrl: "",
     insuranceActive: true,
     governorate: "",
     district: "",
@@ -57,6 +59,7 @@ export default function RegisterCitizenPage() {
     chronicConditions: "",
     allergies: "",
   });
+  const [idPhotoVerified, setIdPhotoVerified] = useState(false);
   const [busy, setBusy] = useState(false);
   const [cred, setCred] = useState<{
     loginId?: string;
@@ -125,7 +128,9 @@ export default function RegisterCitizenPage() {
     f.fullNameEn.trim().length >= 2 &&
     f.fullNameAr.trim().length >= 2 &&
     f.addressAr.trim().length >= 5 &&
-    !!f.birthDate;
+    !!f.birthDate &&
+    Boolean(f.photoUrl) &&
+    idPhotoVerified;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -134,6 +139,7 @@ export default function RegisterCitizenPage() {
       const r = await api.openCitizenAccount({
         ...f,
         phone: f.phone.trim(),
+        photoUrl: f.photoUrl || undefined,
         fullNameEn: f.fullNameEn.trim(),
         fullNameAr: f.fullNameAr.trim(),
         bloodType: f.bloodType || undefined,
@@ -174,6 +180,7 @@ export default function RegisterCitizenPage() {
         sex: "MALE",
         birthDate: "",
         bloodType: "",
+        photoUrl: "",
         insuranceActive: true,
         governorate: "",
         district: "",
@@ -182,6 +189,7 @@ export default function RegisterCitizenPage() {
         chronicConditions: "",
         allergies: "",
       });
+      setIdPhotoVerified(false);
       setSelectedCenter("");
       setAreaSearch("");
       setLiveOsmAreas([]);
@@ -247,6 +255,14 @@ export default function RegisterCitizenPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={submit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <WebcamCapture
+                value={f.photoUrl}
+                onChange={(url) => set("photoUrl", url)}
+                verified={idPhotoVerified}
+                onVerifiedChange={setIdPhotoVerified}
+              />
+            </div>
             <label className="flex flex-col gap-1.5 text-sm font-semibold">
               {ar ? "الرقم القومي (14 رقماً)" : "National ID (14 digits)"}
               <input
@@ -511,7 +527,14 @@ export default function RegisterCitizenPage() {
               />
               {ar ? "تأمين صحي شامل سارٍ (UHIA)" : "Active Universal Health Insurance (UHIA)"}
             </label>
-            <div className="sm:col-span-2">
+            <div className="sm:col-span-2 space-y-2">
+              {(!f.photoUrl || !idPhotoVerified) && (
+                <p className="text-xs font-semibold text-amber-600">
+                  {ar
+                    ? "• يرجى تصوير المواطن بالويب كام وتأكيد مطابقة الصورة مع بطاقة الرقم القومي قبل تفعيل الحساب."
+                    : "• Please capture the citizen's webcam photo and check the National ID photo match box before submitting."}
+                </p>
+              )}
               <Button
                 type="submit"
                 size="lg"

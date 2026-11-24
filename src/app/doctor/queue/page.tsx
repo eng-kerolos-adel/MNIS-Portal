@@ -59,8 +59,8 @@ export default function DoctorQueuePage() {
   const [doctors, setDoctors] = useState<{ id: string; fullNameEn: string; fullNameAr: string; specialityEn?: string; specialityAr?: string; facilityEn?: string; facilityAr?: string }[]>([]);
   const [queueScope, setQueueScope] = useState<"all" | "mine">("all");
   const [selectedFilterDoctorId, setSelectedFilterDoctorId] = useState<string>("ALL");
-  const isGlobalAdmin = me?.role === "ADMIN" || me?.role === "EXECUTIVE";
-  const isClinicalDoctor = !me || me.role === "DOCTOR" || me.role === "ADMIN";
+  const isGlobalAdmin = false;
+  const isClinicalDoctor = !me || me.role === "DOCTOR";
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState("");

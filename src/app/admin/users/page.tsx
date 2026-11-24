@@ -1,14 +1,36 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { UsersRound, UserPlus, KeyRound, Power, ShieldCheck, Lock, Database, Activity, FileSpreadsheet, RefreshCw, Building2, Stethoscope, FlaskConical, Hospital as HospitalIcon, Copy, CheckCircle2, Trash2, XCircle, MapPin, Phone } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  UsersRound,
+  UserPlus,
+  KeyRound,
+  Power,
+  ShieldCheck,
+  Lock,
+  Database,
+  Activity,
+  FileSpreadsheet,
+  RefreshCw,
+  Building2,
+  Stethoscope,
+  FlaskConical,
+  Hospital as HospitalIcon,
+  Pill,
+  ScanEye,
+  Copy,
+  CheckCircle2,
+  Trash2,
+  Search,
+  ChevronDown,
+  ChevronUp,
+  X,
+} from "lucide-react";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { useToast } from "@/lib/toast/ToastProvider";
 import { useApiError } from "@/lib/api/useApiError";
 import { useAuth } from "@/lib/auth/AuthProvider";
-import { api, patientId } from "@/lib/data/service";
-import type { NationalIdentity } from "@/types/domain";
-import { pick } from "@/lib/utils/format";
+import { api } from "@/lib/data/service";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -17,27 +39,46 @@ import { Modal } from "@/components/ui/Modal";
 import { CredentialModal } from "@/components/ui/CredentialModal";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-type U = Awaited<ReturnType<typeof api.listUsers>>[number];
 type FacilityItem = Awaited<ReturnType<typeof api.getFacilities>>[number];
+type FacilityStaffMember = FacilityItem["staff"][number];
 type BundleCreds = Awaited<ReturnType<typeof api.createFacilityBundle>>;
+
 const ROLES: Record<string, { en: string; ar: string }> = {
   DOCTOR: { en: "Physician", ar: "طبيب" },
   PHARMACIST: { en: "Pharmacist", ar: "صيدلي" },
-  LAB_TECH: { en: "Lab specialist", ar: "أخصائي معمل" },
-  HOSPITAL_STAFF: { en: "Hospital staff", ar: "طاقم المستشفى" },
+  LAB_TECH: { en: "Lab / Radiology Tech", ar: "أخصائي معمل / أشعة" },
+  HOSPITAL_STAFF: { en: "Hospital Staff", ar: "طاقم المستشفى" },
   EXECUTIVE: { en: "Executive", ar: "قيادة تنفيذية" },
   RECEPTIONIST: { en: "Receptionist / Assistant", ar: "استقبال / مساعد عيادة" },
   ADMIN: { en: "Administrator", ar: "مدير النظام" },
-  PATIENT: { en: "Citizen", ar: "مواطن" },
 };
-const FACILITY_LABELS: Record<string, { en: string; ar: string; tone: "secondary" | "success" | "warning" | "neutral" }> = {
-  CLINIC: { en: "Doctor Clinic", ar: "عيادة طبيب", tone: "secondary" },
-  LAB: { en: "Diagnostic Lab", ar: "معمل تحاليل", tone: "warning" },
+
+const FACILITY_LABELS: Record<
+  string,
+  { en: string; ar: string; tone: "secondary" | "success" | "warning" | "neutral" }
+> = {
+  CLINIC: { en: "Doctor Clinic", ar: "عيادة طبية", tone: "secondary" },
+  LAB: { en: "Analysis Lab", ar: "معمل تحاليل", tone: "warning" },
+  RADIOLOGY: { en: "Radiology Center", ar: "معمل / مركز أشعة", tone: "secondary" },
   HOSPITAL: { en: "Hospital", ar: "مستشفى", tone: "success" },
   PHARMACY: { en: "Pharmacy", ar: "صيدلية", tone: "neutral" },
-  COMMAND: { en: "Command Center", ar: "مركز قيادة", tone: "neutral" },
+  RECEPTION: { en: "Citizen Reception Desk", ar: "مكتب استقبال مواطنين", tone: "neutral" },
+  COMMAND: { en: "Command & System Admin", ar: "الإدارة والقيادة التنفيذية", tone: "neutral" },
 };
-const field = "h-10 w-full rounded-lg bg-surface-container-low px-3 text-sm outline-none focus:ring-2 focus:ring-secondary/50";
+
+const field =
+  "h-10 w-full rounded-lg bg-surface-container-low px-3 text-sm outline-none focus:ring-2 focus:ring-secondary/50";
+
+function staffSubRoleLabel(st: FacilityStaffMember, ar: boolean): string {
+  const spec = (st.specialityEn ?? "").toUpperCase();
+  if (spec === "CLINIC_ASSISTANT") return ar ? "مساعد عيادة الطبيب" : "Clinic Assistant";
+  if (spec === "RADIOLOGY_RECEPTION") return ar ? "استقبال مركز الأشعة" : "Radiology Reception";
+  if (spec === "RADIOLOGY_DIRECTOR") return ar ? "مدير مركز الأشعة" : "Radiology Director";
+  if (spec.startsWith("RADIOLOGY")) return ar ? "أخصائي أشعة تشخيصية" : "Radiology Specialist";
+  if (spec === "LAB_RECEPTION") return ar ? "استقبال معمل التحاليل" : "Lab Reception";
+  if (spec.includes("DIRECTOR")) return ar ? "مدير معمل ومعتمد نتائج" : "Lab Director & Verifier";
+  return ROLES[st.role]?.[ar ? "ar" : "en"] ?? st.role;
+}
 
 export default function StaffUsersPage() {
   const { locale } = useLocale();
@@ -45,17 +86,24 @@ export default function StaffUsersPage() {
   const handleError = useApiError();
   const { user: me } = useAuth();
   const ar = locale === "ar";
-  const [users, setUsers] = useState<U[]>([]);
+
   const [facilities, setFacilities] = useState<FacilityItem[]>([]);
   const [facilityFilter, setFacilityFilter] = useState<string>("ALL");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [expandedKeys, setExpandedKeys] = useState<string[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [posture, setPosture] = useState<any>(null);
   const [resourceFilter, setResourceFilter] = useState<string>("ALL");
+  const [auditQuery, setAuditQuery] = useState("");
+
   const [open, setOpen] = useState(false);
   const [bundleOpen, setBundleOpen] = useState(false);
   const [bundleCreds, setBundleCreds] = useState<BundleCreds | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<FacilityStaffMember | null>(null);
+
   const [bundleForm, setBundleForm] = useState<{
-    facilityType: "CLINIC" | "LAB" | "HOSPITAL";
+    facilityType: "CLINIC" | "LAB" | "HOSPITAL" | "PHARMACY";
+    labSubType: "ANALYSIS" | "RADIOLOGY";
     facilityEn: string;
     facilityAr: string;
     specialityEn: string;
@@ -69,6 +117,7 @@ export default function StaffUsersPage() {
     secondaryEmail: string;
   }>({
     facilityType: "CLINIC",
+    labSubType: "ANALYSIS",
     facilityEn: "",
     facilityAr: "",
     specialityEn: "",
@@ -81,6 +130,7 @@ export default function StaffUsersPage() {
     secondaryNameAr: "",
     secondaryEmail: "",
   });
+
   const [f, setF] = useState({
     email: "",
     role: "DOCTOR",
@@ -92,28 +142,20 @@ export default function StaffUsersPage() {
     facilityEn: "",
     facilityAr: "",
   });
-  const [sessionsCount, setSessionsCount] = useState<number>(0);
-  const [pendingDeletions, setPendingDeletions] = useState<NationalIdentity[]>([]);
-  const [delBusyId, setDelBusyId] = useState<string | null>(null);
+
   const [busy, setBusy] = useState(false);
   const [pw, setPw] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
-      const [uList, facList, logs, pos, sessions, dels] = await Promise.all([
-        api.listUsers(),
+      const [facList, logs, pos] = await Promise.all([
         api.getFacilities().catch(() => []),
         api.getAuditLogs().catch(() => []),
         api.getSecurityPosture().catch(() => null),
-        api.getActiveSessions().catch(() => []),
-        api.getPendingCitizenDeletions().catch(() => []),
       ]);
-      setUsers(uList);
       setFacilities(facList);
       setAuditLogs(logs);
       setPosture(pos);
-      setSessionsCount(sessions.length);
-      setPendingDeletions(dels);
     } catch (e) {
       handleError(e);
     }
@@ -122,6 +164,17 @@ export default function StaffUsersPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const totalStaffCount = useMemo(
+    () => facilities.reduce((acc, fac) => acc + fac.staff.length, 0),
+    [facilities],
+  );
+
+  function toggleFacilityExpand(key: string) {
+    setExpandedKeys((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key],
+    );
+  }
 
   async function create(e: FormEvent) {
     e.preventDefault();
@@ -139,7 +192,17 @@ export default function StaffUsersPage() {
         facilityAr: f.facilityAr.trim() || undefined,
       });
       setOpen(false);
-      setF({ email: "", role: "DOCTOR", fullNameEn: "", fullNameAr: "", licenseNo: "", specialityEn: "", specialityAr: "", facilityEn: "", facilityAr: "" });
+      setF({
+        email: "",
+        role: "DOCTOR",
+        fullNameEn: "",
+        fullNameAr: "",
+        licenseNo: "",
+        specialityEn: "",
+        specialityAr: "",
+        facilityEn: "",
+        facilityAr: "",
+      });
       setPw(r.temporaryPassword);
       await load();
     } catch (err) {
@@ -161,7 +224,9 @@ export default function StaffUsersPage() {
           ? "assistant"
           : bundleForm.facilityType === "LAB"
             ? "specialist"
-            : "doctor";
+            : bundleForm.facilityType === "PHARMACY"
+              ? "dispensing"
+              : "doctor";
       const secEmail =
         rawSec && rawSec !== priEmail
           ? rawSec
@@ -169,6 +234,7 @@ export default function StaffUsersPage() {
 
       const res = await api.createFacilityBundle({
         facilityType: bundleForm.facilityType,
+        labSubType: bundleForm.facilityType === "LAB" ? bundleForm.labSubType : undefined,
         facilityEn: bundleForm.facilityEn.trim(),
         facilityAr: bundleForm.facilityAr.trim(),
         primaryEmail: priEmail,
@@ -184,6 +250,7 @@ export default function StaffUsersPage() {
       setBundleOpen(false);
       setBundleForm({
         facilityType: "CLINIC",
+        labSubType: "ANALYSIS",
         facilityEn: "",
         facilityAr: "",
         specialityEn: "",
@@ -200,8 +267,8 @@ export default function StaffUsersPage() {
       push(
         "success",
         ar
-          ? `تم إنشاء المنشأة الطبية (${res.facilityAr}) وتفعيل حسابات فريق العمل بنجاح`
-          : `Facility (${res.facilityEn}) & staff team provisioned`
+          ? `تم إنشاء المنشأة (${res.facilityAr}) وتفعيل حسابات فريق العمل بنجاح`
+          : `Facility (${res.facilityEn}) & staff team provisioned`,
       );
       await load();
     } catch (err) {
@@ -213,7 +280,7 @@ export default function StaffUsersPage() {
 
   function openAddStaffForFacility(fac: FacilityItem) {
     const defaultRole =
-      fac.facilityType === "LAB"
+      fac.facilityType === "LAB" || fac.facilityType === "RADIOLOGY"
         ? "LAB_TECH"
         : fac.facilityType === "HOSPITAL"
           ? "HOSPITAL_STAFF"
@@ -226,27 +293,57 @@ export default function StaffUsersPage() {
       fullNameEn: "",
       fullNameAr: "",
       licenseNo: "",
-      specialityEn: fac.facilityType === "CLINIC" ? "CLINIC_ASSISTANT" : fac.facilityType === "LAB" ? "LAB_RECEPTION" : "",
-      specialityAr: fac.facilityType === "CLINIC" ? "مساعد طبيب وإدارة عيادة" : fac.facilityType === "LAB" ? "استقبال وسحب عينات المعمل" : "",
+      specialityEn:
+        fac.facilityType === "CLINIC"
+          ? "CLINIC_ASSISTANT"
+          : fac.facilityType === "RADIOLOGY"
+            ? "RADIOLOGY_SPECIALIST"
+            : fac.facilityType === "LAB"
+              ? "Diagnostic Lab Specialist"
+              : fac.facilityType === "PHARMACY"
+                ? "Dispensing Pharmacist"
+                : "",
+      specialityAr:
+        fac.facilityType === "CLINIC"
+          ? "مساعد طبيب وإدارة عيادة"
+          : fac.facilityType === "RADIOLOGY"
+            ? "أخصائي أشعة تشخيصية معتمد"
+            : fac.facilityType === "LAB"
+              ? "أخصائي تحاليل طبية معتمد"
+              : fac.facilityType === "PHARMACY"
+                ? "صيدلي صرف الأدوية"
+                : "",
       facilityEn: fac.facilityEn,
       facilityAr: fac.facilityAr,
     });
     setOpen(true);
   }
 
-  async function toggle(u: U) {
+  async function toggle(u: FacilityStaffMember) {
     if (u.id === me?.id) return;
     try {
       await api.setUserActive(u.id, !u.isActive);
-      push("success", ar ? "تم تحديث صلاحية الحساب وإلغاء الجلسات النشطة عند الإيقاف" : "Account status updated");
+      push(
+        "success",
+        ar
+          ? "تم تحديث صلاحية الحساب وإلغاء الجلسات النشطة عند الإيقاف"
+          : "Account status updated",
+      );
       await load();
     } catch (e) {
       handleError(e);
     }
   }
 
-  async function reset(u: U) {
-    if (!window.confirm(ar ? "إعادة تعيين كلمة المرور؟ ستُنهى جميع جلسات المستخدم النشطة فوراً." : "Reset password? All active sessions for this user will be revoked.")) return;
+  async function reset(u: FacilityStaffMember) {
+    if (
+      !window.confirm(
+        ar
+          ? `إعادة تعيين كلمة مرور (${u.fullNameAr})؟`
+          : `Reset password for ${u.fullNameEn}?`,
+      )
+    )
+      return;
     try {
       setPw((await api.resetUserPassword(u.id)).temporaryPassword);
       await load();
@@ -255,68 +352,101 @@ export default function StaffUsersPage() {
     }
   }
 
-  async function handleMinistryApproveDeletion(p: NationalIdentity) {
-    const id = patientId(p);
-    if (!window.confirm(ar ? `تأكيد الوزارة: سيتم حذف المواطن (${pick(p.fullName, locale)}) وسجله الطبي نهائياً. هل أنت متأكد؟` : `Ministry Confirmation: permanently delete citizen (${pick(p.fullName, locale)})?`)) return;
-    setDelBusyId(id);
+  async function confirmDeleteStaff() {
+    if (!deleteTarget || deleteTarget.id === me?.id) return;
+    setBusy(true);
     try {
-      await api.approveCitizenDeletion(id);
-      push("success", ar ? "تم تأكيد الوزارة وحذف سجل المواطن نهائياً" : "Citizen permanently deleted with Ministry confirmation");
+      await api.deleteStaff(deleteTarget.id);
+      push(
+        "success",
+        ar
+          ? `تم حذف حساب الموظف (${deleteTarget.fullNameAr}) من المنظومة بنجاح`
+          : `Staff member (${deleteTarget.fullNameEn}) permanently removed`,
+      );
+      setDeleteTarget(null);
       await load();
     } catch (e) {
       handleError(e);
     } finally {
-      setDelBusyId(null);
+      setBusy(false);
     }
   }
 
-  async function handleMinistryRejectDeletion(p: NationalIdentity) {
-    const id = patientId(p);
-    setDelBusyId(id);
-    try {
-      await api.rejectCitizenDeletion(id);
-      push("info", ar ? "تم رفض طلب الحذف والإبقاء على سجل المواطن" : "Deletion request rejected");
-      await load();
-    } catch (e) {
-      handleError(e);
-    } finally {
-      setDelBusyId(null);
-    }
-  }
+  const normalizedSearch = searchQuery.trim().toLowerCase();
 
-  const filteredLogs = auditLogs.filter((l) => resourceFilter === "ALL" || (l.resourceType ?? "SYSTEM") === resourceFilter);
-  const filteredFacilities = facilities.filter((fac) => facilityFilter === "ALL" || fac.facilityType === facilityFilter);
+  const filteredFacilities = useMemo(() => {
+    return facilities
+      .filter((fac) => facilityFilter === "ALL" || fac.facilityType === facilityFilter)
+      .map((fac) => {
+        if (!normalizedSearch) {
+          return { fac, visibleStaff: fac.staff, autoExpand: false };
+        }
+        const facText = `${fac.facilityAr} ${fac.facilityEn} ${FACILITY_LABELS[fac.facilityType]?.ar ?? ""} ${FACILITY_LABELS[fac.facilityType]?.en ?? ""}`.toLowerCase();
+        const facMatches = facText.includes(normalizedSearch);
+        const matchingStaff = fac.staff.filter((st) => {
+          const stText = [
+            st.fullNameAr,
+            st.fullNameEn,
+            st.email,
+            st.licenseNo,
+            st.role,
+            st.specialityEn,
+            st.specialityAr,
+            staffSubRoleLabel(st, true),
+            staffSubRoleLabel(st, false),
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+          return stText.includes(normalizedSearch);
+        });
+        if (facMatches || matchingStaff.length > 0) {
+          return {
+            fac,
+            visibleStaff: matchingStaff.length > 0 ? matchingStaff : fac.staff,
+            autoExpand: matchingStaff.length > 0 || facMatches,
+          };
+        }
+        return null;
+      })
+      .filter((x): x is { fac: FacilityItem; visibleStaff: FacilityStaffMember[]; autoExpand: boolean } => x !== null);
+  }, [facilities, facilityFilter, normalizedSearch]);
+
+  const filteredLogs = useMemo(() => {
+    const aq = auditQuery.trim().toLowerCase();
+    return auditLogs.filter((l) => {
+      if (resourceFilter !== "ALL" && (l.resourceType ?? "SYSTEM") !== resourceFilter) return false;
+      if (!aq) return true;
+      const text = [
+        l.actor?.fullNameAr,
+        l.actor?.fullNameEn,
+        l.actor?.email,
+        l.role,
+        l.resourceType,
+        l.method,
+        l.path,
+        l.ip,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return text.includes(aq);
+    });
+  }, [auditLogs, resourceFilter, auditQuery]);
 
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
         icon={UsersRound}
-        title={ar ? "حوكمة النظام، حسابات الموظفين، ومركز الأمن الرقمي" : "National Security, Audit Trail & Staff Governance"}
-        badge={ar ? "منصة الحوكمة والرقابة الوطنية" : "National Governance Portal"}
+        title={ar ? "إدارة المنشآت الطبية، الموظفين، والأمن السيبراني" : "Facility Directory, Staff Governance & Security Audit"}
+        badge={ar ? "منصة إدارة النظام" : "System Administration"}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {sessionsCount > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  try {
-                    const r = await api.revokeAllSessions();
-                    push("success", ar ? `تم إنهاء ${r.revoked} جلسة نشطة` : `Revoked ${r.revoked} active sessions`);
-                    await load();
-                  } catch (e) {
-                    handleError(e);
-                  }
-                }}
-              >
-                {ar ? `إنهاء الجلسات النشطة (${sessionsCount})` : `Revoke Sessions (${sessionsCount})`}
-              </Button>
-            )}
             <Button variant="outline" size="sm" icon={<RefreshCw className="h-4 w-4" />} onClick={load}>
               {ar ? "تحديث السجلات" : "Refresh"}
             </Button>
             <Button variant="secondary" icon={<Building2 className="h-4 w-4" />} onClick={() => setBundleOpen(true)}>
-              {ar ? "إضافة عيادة / معمل / مستشفى بالموظفين" : "Add Clinic / Lab / Hospital + Staff"}
+              {ar ? "إضافة عيادة / معمل / مستشفى / صيدلية" : "Add Clinic / Lab / Hospital / Pharmacy"}
             </Button>
             <Button icon={<UserPlus className="h-4 w-4" />} onClick={() => setOpen(true)}>
               {ar ? "موظف جديد" : "New staff member"}
@@ -325,7 +455,7 @@ export default function StaffUsersPage() {
         }
       />
 
-      {/* Sovereign Security & 120M Scale Posture Banner */}
+      {/* Sovereign Security & Coverage Posture Banner */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="p-4 border-s-4 border-s-emerald-600">
           <div className="flex items-center gap-2 text-emerald-600 text-xs font-bold mb-1">
@@ -335,8 +465,8 @@ export default function StaffUsersPage() {
           <div className="text-base font-black text-on-surface">{ar ? "تشفير طبي معتمد" : "Certified Medical Encryption"}</div>
           <p className="text-[11px] text-on-surface-variant mt-1">
             {ar
-              ? "حماية مشفرة لأرقام المواطنين القومية مع فحص وبحث فوري مؤمَّن على مستوى الجمهورية"
-              : "Encrypted citizen national IDs with secure instant nationwide directory lookup"}
+              ? "حماية مشفرة لأرقام المواطنين القومية مع فصل كامل للصلاحيات"
+              : "Encrypted national IDs with strict role & portal isolation"}
           </p>
         </Card>
 
@@ -356,13 +486,15 @@ export default function StaffUsersPage() {
         <Card className="p-4 border-s-4 border-s-purple-600">
           <div className="flex items-center gap-2 text-purple-600 text-xs font-bold mb-1">
             <Database className="w-4 h-4" />
-            {ar ? "نطاق التغطية القومية الموحدة" : "Unified National Coverage"}
+            {ar ? "المنشآت والكوادر المسجلة" : "Registered Facilities & Staff"}
           </div>
-          <div className="text-base font-black text-on-surface">{ar ? "27 محافظة مترابطة" : "27 Governorates Linked"}</div>
+          <div className="text-base font-black text-on-surface">
+            {facilities.length} {ar ? "منشأة" : "Facilities"} • {totalStaffCount} {ar ? "موظف" : "Staff"}
+          </div>
           <p className="text-[11px] text-on-surface-variant mt-1">
             {ar
-              ? "تكامل شامل عبر عيادات ومعامل ومستشفيات المحافظات مع مؤشرات إحصائية لحظية"
-              : "Unified integration across governorate clinics, labs, and hospitals with real-time reporting"}
+              ? "اضغط على أي منشأة لاستعراض موظفيها أو إيقاف/حذف أي موظف"
+              : "Click any facility below to inspect, reset, disable, or delete its staff"}
           </p>
         </Card>
 
@@ -376,244 +508,249 @@ export default function StaffUsersPage() {
           </div>
           <p className="text-[11px] text-on-surface-variant mt-1">
             {ar
-              ? `الجلسات النشطة: ${posture?.activeSessions ?? 1} • محاولات مرفوضة: ${posture?.failedRequests ?? 0}`
-              : `Active Sessions: ${posture?.activeSessions ?? 1} • Blocked/Failed: ${posture?.failedRequests ?? 0}`}
+              ? `محاولات مرفوضة: ${posture?.failedRequests ?? 0} • حسابات مقفلة: ${posture?.lockedAccounts ?? 0}`
+              : `Blocked/Failed: ${posture?.failedRequests ?? 0} • Locked: ${posture?.lockedAccounts ?? 0}`}
           </p>
         </Card>
       </div>
 
-      {/* Pending Citizen Deletion Requests (Ministry Confirmation) */}
-      <Card className="border-error/30">
-        <CardHeader className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle className="flex items-center gap-2">
-            <Trash2 className="h-4 w-4 text-error" />
-            {ar
-              ? `طلبات حذف المواطنين بانتظار تأكيد واعتماد الوزارة (${pendingDeletions.length})`
-              : `Citizen Deletion Requests — Pending Ministry Confirmation (${pendingDeletions.length})`}
-          </CardTitle>
-          <Badge tone={pendingDeletions.length > 0 ? "warning" : "neutral"}>
-            {pendingDeletions.length > 0
-              ? (ar ? "يتطلب تأكيد الوزارة" : "Action Required")
-              : (ar ? "لا توجد طلبات معلّقة" : "No Pending Requests")}
-          </Badge>
-        </CardHeader>
-        <CardContent>
-          {pendingDeletions.length === 0 ? (
-            <p className="text-xs text-on-surface-variant py-2">
-              {ar
-                ? "لا توجد طلبات حذف مواطنين معلّقة حالياً."
-                : "No pending citizen deletion requests."}
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {pendingDeletions.map((p) => {
-                const id = patientId(p);
-                const addrText = [p.governorate, p.district, pick(p.address, locale)].filter(Boolean).join(" — ");
-                return (
-                  <div key={id} className="rounded-xl border border-error/30 bg-error/5 p-3.5 flex flex-col gap-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-bold text-on-surface">{pick(p.fullName, locale)}</p>
-                        <p className="text-xs font-mono text-primary">{p.mti} • {p.nationalId}</p>
-                      </div>
-                      <Badge tone="warning">{ar ? "بانتظار التأكيد" : "Pending"}</Badge>
-                    </div>
-                    <div className="text-xs text-on-surface-variant space-y-1">
-                      <p className="flex items-center gap-1.5" dir="ltr">
-                        <Phone className="w-3.5 h-3.5 shrink-0" />
-                        <span>{p.phone ?? "—"}</span>
-                      </p>
-                      <p className="flex items-start gap-1.5">
-                        <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                        <span>{addrText || "—"}</span>
-                      </p>
-                      <p className="font-semibold text-error">
-                        {ar ? "سبب الطلب:" : "Reason:"} {p.deletionReason}
-                      </p>
-                      {p.deletionRequestedByName && (
-                        <p className="text-[11px]">
-                          {ar ? "مُقدّم الطلب:" : "By:"} {p.deletionRequestedByName}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-error/20">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={delBusyId === id}
-                        icon={<XCircle className="w-3.5 h-3.5" />}
-                        onClick={() => handleMinistryRejectDeletion(p)}
-                      >
-                        {ar ? "رفض الطلب" : "Reject Request"}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        loading={delBusyId === id}
-                        icon={<CheckCircle2 className="w-3.5 h-3.5" />}
-                        onClick={() => handleMinistryApproveDeletion(p)}
-                      >
-                        {ar ? "تأكيد واعتماد الحذف النهائي" : "Confirm & Delete Permanently"}
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Nationwide Registered Medical Facilities Directory */}
+      {/* Dedicated Admin Search Bar + Facility-Centric Staff Drill-Down */}
       <Card>
-        <CardHeader className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-primary" />
-              {ar
-                ? `دليل المنشآت الطبية المسجلة بالجمهورية (${facilities.length})`
-                : `Nationwide Registered Medical Facilities (${facilities.length})`}
-            </CardTitle>
-            <p className="text-xs text-on-surface-variant mt-0.5">
-              {ar
-                ? "عيادات الأطباء المستقلة، المعامل التشخيصية، المستشفيات، والصيدليات مع فرق العمل المخصصة لكل منشأة"
-                : "Doctor clinics, diagnostic laboratories, hospitals, and pharmacies with their dedicated staff teams"}
-            </p>
+        <CardHeader className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-primary" />
+                {ar
+                  ? `المنشآت الطبية وإدارة الموظفين (${facilities.length})`
+                  : `Registered Facilities & Staff Drill-Down (${facilities.length})`}
+              </CardTitle>
+              <p className="text-xs text-on-surface-variant mt-0.5">
+                {ar
+                  ? "اضغط على أي منشأة لفتح قائمة الموظفين التابعين لها مباشرة، أو ابحث بالاسم/البريد للوصول الفوري للموظف وحذفه أو تعديله"
+                  : "Click any facility card to expand and manage its assigned staff, or search by staff name/email below"}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {(["ALL", "CLINIC", "LAB", "RADIOLOGY", "HOSPITAL", "PHARMACY", "RECEPTION", "COMMAND"] as const).map((tp) => (
+                <button
+                  key={tp}
+                  type="button"
+                  onClick={() => setFacilityFilter(tp)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
+                    facilityFilter === tp
+                      ? "bg-primary text-on-primary"
+                      : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container"
+                  }`}
+                >
+                  {tp === "ALL" ? (ar ? "الكل" : "All") : FACILITY_LABELS[tp]?.[locale] ?? tp}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {(["ALL", "CLINIC", "LAB", "HOSPITAL", "PHARMACY"] as const).map((tp) => (
+
+          {/* Dedicated Staff & Facility Search Bar */}
+          <div className="relative flex items-center self-end w-[40%]">
+            <Search className="pointer-events-none absolute inset-s-3.5 h-4 w-4 text-primary" />
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={
+                ar
+                  ? "ابحث عن موظف بالاسم أو البريد أو رقم الترخيص أو التخصص أو اسم المنشأة لحذفه أو إيقافه فوراً..."
+                  : "Search staff by name, email, license number, specialty, or facility name..."
+              }
+              className="h-11 w-full rounded-xl border border-primary/25 bg-surface-container-low ps-10 pe-10 text-sm text-on-surface outline-none transition focus:border-primary focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/20"
+            />
+            {searchQuery && (
               <button
-                key={tp}
-                onClick={() => setFacilityFilter(tp)}
-                className={`px-3 py-1 rounded-lg text-xs font-semibold transition ${
-                  facilityFilter === tp
-                    ? "bg-primary text-on-primary"
-                    : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container"
-                }`}
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute inset-e-3 rounded-md p-1 text-on-surface-variant hover:bg-surface-container-high"
+                aria-label="Clear staff search"
               >
-                {tp === "ALL" ? (ar ? "الكل" : "All") : FACILITY_LABELS[tp]?.[locale] ?? tp}
+                <X className="h-4 w-4" />
               </button>
-            ))}
+            )}
           </div>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          {filteredFacilities.map((fac) => {
+
+        <CardContent className="flex flex-col gap-3">
+          {filteredFacilities.length === 0 && (
+            <p className="py-8 text-center text-sm text-on-surface-variant">
+              {ar ? "لا توجد منشآت أو موظفين مطابقين لعبارة البحث." : "No facilities or staff members match your search."}
+            </p>
+          )}
+
+          {filteredFacilities.map(({ fac, visibleStaff, autoExpand }) => {
             const meta = FACILITY_LABELS[fac.facilityType] ?? FACILITY_LABELS.COMMAND!;
+            const isExpanded = autoExpand || expandedKeys.includes(fac.key);
             return (
-              <div key={fac.key} className="rounded-xl border border-outline-variant/40 bg-surface-container-lowest p-4 flex flex-col gap-3">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
+              <div
+                key={fac.key}
+                className="rounded-xl border border-outline-variant/50 bg-surface-container-lowest overflow-hidden transition-shadow hover:shadow-level-1"
+              >
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => toggleFacilityExpand(fac.key)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      toggleFacilityExpand(fac.key);
+                    }
+                  }}
+                  className="flex flex-wrap items-center justify-between gap-3 p-4 cursor-pointer hover:bg-surface-container-low/50 transition-colors"
+                >
+                  <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-bold text-primary">
+                      <span className="text-sm sm:text-base font-bold text-primary">
                         {ar ? fac.facilityAr : fac.facilityEn}
                       </span>
                       <Badge tone={meta.tone}>{meta[locale]}</Badge>
+                      <Badge tone="neutral">
+                        {fac.staff.length} {ar ? "موظف" : "Staff"}
+                      </Badge>
                     </div>
                     <p className="text-[11px] text-on-surface-variant mt-0.5" dir="ltr">
                       {fac.facilityEn}
                     </p>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    icon={<UserPlus className="h-3.5 w-3.5" />}
-                    onClick={() => openAddStaffForFacility(fac)}
-                  >
-                    {ar ? "+ موظف" : "+ Staff"}
-                  </Button>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      icon={<UserPlus className="h-3.5 w-3.5" />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openAddStaffForFacility(fac);
+                      }}
+                    >
+                      {ar ? "+ موظف" : "+ Staff"}
+                    </Button>
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-container-low text-on-surface-variant">
+                      {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex flex-col gap-1.5 border-t border-outline-variant/30 pt-2">
-                  {fac.staff.map((st) => (
-                    <div key={st.id} className="flex items-center justify-between text-xs bg-surface-container-low/70 rounded-lg px-2.5 py-1.5">
-                      <div className="min-w-0">
-                        <span className="font-semibold text-on-surface">
-                          {ar ? st.fullNameAr : st.fullNameEn}
-                        </span>
-                        <span className="text-[11px] text-on-surface-variant ms-2 font-mono" dir="ltr">
-                          {st.email}
-                        </span>
-                      </div>
-                      <span className="shrink-0 text-[10px] font-bold text-secondary">
-                        {st.specialityEn === "CLINIC_ASSISTANT"
-                          ? (ar ? "مساعد الطبيب" : "Clinic Assistant")
-                          : st.specialityEn === "LAB_RECEPTION"
-                            ? (ar ? "استقبال المعمل" : "Lab Reception")
-                            : (ROLES[st.role]?.[locale] ?? st.role)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+
+                {isExpanded && (
+                  <div className="border-t border-outline-variant/40 bg-surface-container-low/30 p-3 flex flex-col gap-2">
+                    {visibleStaff.map((u) => {
+                      const isSelf = u.id === me?.id;
+                      const isLocked = Boolean(u.lockedUntil && new Date(u.lockedUntil) > new Date());
+                      return (
+                        <div
+                          key={u.id}
+                          className="flex flex-col gap-2 rounded-lg border border-outline-variant/40 bg-surface-container-lowest p-3 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm font-bold text-on-surface">
+                                {ar ? u.fullNameAr : u.fullNameEn}
+                              </p>
+                              <Badge tone="secondary">{staffSubRoleLabel(u, ar)}</Badge>
+                              <Badge tone={u.isActive ? "success" : "error"}>
+                                {u.isActive ? (ar ? "نشط" : "Active") : ar ? "موقوف" : "Disabled"}
+                              </Badge>
+                              {u.mustChangePassword && (
+                                <Badge tone="warning">{ar ? "كلمة مؤقتة" : "Temp password"}</Badge>
+                              )}
+                              {isLocked && (
+                                <Badge tone="error">{ar ? "مقفل مؤقتاً" : "Locked"}</Badge>
+                              )}
+                            </div>
+                            <p dir="ltr" className="text-start text-xs text-on-surface-variant mt-0.5 font-mono">
+                              {u.email} {u.licenseNo ? `• Lic: ${u.licenseNo}` : ""}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              icon={<KeyRound className="h-3.5 w-3.5" />}
+                              onClick={() => reset(u)}
+                            >
+                              {ar ? "كلمة جديدة" : "Reset"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              icon={<Power className="h-3.5 w-3.5" />}
+                              disabled={isSelf}
+                              onClick={() => toggle(u)}
+                            >
+                              {u.isActive ? (ar ? "إيقاف" : "Disable") : ar ? "تفعيل" : "Enable"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              icon={<Trash2 className="h-3.5 w-3.5" />}
+                              disabled={isSelf}
+                              onClick={() => setDeleteTarget(u)}
+                            >
+                              {ar ? "حذف" : "Delete"}
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             );
           })}
         </CardContent>
       </Card>
 
-      {/* Staff Accounts Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            {ar ? "حسابات الكوادر الطبية والإدارية (RBAC)" : "Medical & Administrative Staff Accounts"} ({users.length})
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2">
-          {users.map((u) => (
-            <div key={u.id} className="flex flex-col gap-2 rounded-lg border border-outline-variant/40 p-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-bold text-on-surface">{locale === "ar" ? u.fullNameAr : u.fullNameEn}</p>
-                <p dir="ltr" className="text-start text-xs text-on-surface-variant">
-                  {u.email} {u.licenseNo ? `• Lic: ${u.licenseNo}` : ""}
-                </p>
-                {(u.specialityAr || u.specialityEn || u.facilityAr || u.facilityEn) && (
-                  <p className="text-[11px] text-secondary font-semibold mt-0.5">
-                    {[ar ? (u.specialityAr ?? u.specialityEn) : (u.specialityEn ?? u.specialityAr), ar ? (u.facilityAr ?? u.facilityEn) : (u.facilityEn ?? u.facilityAr)].filter(Boolean).join(" • ")}
-                  </p>
-                )}
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge tone="secondary">{ROLES[u.role]?.[locale] ?? u.role}</Badge>
-                <Badge tone={u.isActive ? "success" : "error"}>
-                  {u.isActive ? (ar ? "نشط" : "Active") : ar ? "موقوف" : "Disabled"}
-                </Badge>
-                {u.mustChangePassword && <Badge tone="warning">{ar ? "كلمة مؤقتة" : "Temp password"}</Badge>}
-                <Button size="sm" variant="outline" icon={<KeyRound className="h-3.5 w-3.5" />} onClick={() => reset(u)}>
-                  {ar ? "كلمة جديدة" : "Reset"}
-                </Button>
-                <Button size="sm" variant="ghost" icon={<Power className="h-3.5 w-3.5" />} disabled={u.id === me?.id} onClick={() => toggle(u)}>
-                  {u.isActive ? (ar ? "إيقاف" : "Disable") : ar ? "تفعيل" : "Enable"}
-                </Button>
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
       {/* Immutable Security Audit Trail */}
       <Card className="overflow-hidden">
-        <CardHeader className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <FileSpreadsheet className="h-4 w-4 text-primary" />
-              {ar ? "سجل الرقابة الجنائية والأمن السيادي غير القابل للتعديل (Immutable Audit Trail)" : "Sovereign Immutable Security Audit Log"}
-            </CardTitle>
-            <p className="text-xs text-on-surface-variant mt-1">
-              {ar
-                ? "يتم توثيق كافة عمليات الاطلاع أو التعديل على ملفات المواطنين والروشتات والتحاليل والقرارات الإدارية تلقائياً"
-                : "Every read/write action across patient records, prescriptions, labs, and analytics is automatically logged"}
-            </p>
+        <CardHeader className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 flex-col self-start">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <FileSpreadsheet className="h-4 w-4 text-primary" />
+                {ar ? "سجل الرقابة الجنائية والأمن السيادي غير القابل للتعديل (Immutable Audit Trail)" : "Sovereign Immutable Security Audit Log"}
+              </CardTitle>
+              <p className="text-xs text-on-surface-variant mt-1">
+                {ar
+                  ? "توثيق تلقائي لكافة العمليات الإدارية والوصول عبر القطاعات"
+                  : "Every administrative and cross-sector access event is logged automatically"}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-1.5 self-start">
+              {["ALL", "USER", "PATIENT", "PRESCRIPTION", "LAB_SAMPLE", "NFC_CARD", "ANALYTICS"].map((res) => (
+                <button
+                  key={res}
+                  type="button"
+                  onClick={() => setResourceFilter(res)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
+                    resourceFilter === res ? "bg-primary text-on-primary" : "bg-surface-container-low hover:bg-surface-container"
+                  }`}
+                >
+                  {res}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {["ALL", "PATIENT", "PRESCRIPTION", "LAB_SAMPLE", "NFC_CARD", "ANALYTICS", "USER"].map((res) => (
+          <div className="relative flex items-center self-end w-[40%]">
+            <Search className="pointer-events-none absolute inset-s-3.5 h-4 w-4 text-primary" />
+            <input
+              value={auditQuery}
+              onChange={(e) => setAuditQuery(e.target.value)}
+              placeholder={ar ? "بحث في سجل المراجعة باسم المنفذ أو المسار أو الدور..." : "Filter audit logs by actor name, path, IP, or role..."}
+              className="h-11 w-full rounded-xl border border-primary/25 bg-surface-container-low ps-10 pe-10 text-sm text-on-surface outline-none transition focus:border-primary focus:bg-surface-container-lowest focus:ring-2 focus:ring-primary/20"
+            />
+            {auditQuery && (
               <button
-                key={res}
-                onClick={() => setResourceFilter(res)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
-                  resourceFilter === res ? "bg-primary text-on-primary" : "bg-surface-container-low hover:bg-surface-container"
-                }`}
+                type="button"
+                onClick={() => setAuditQuery("")}
+                className="absolute inset-e-3 rounded-md p-1 text-on-surface-variant hover:bg-surface-container-high"
               >
-                {res}
+                <X className="h-3.5 w-3.5" />
               </button>
-            ))}
+            )}
           </div>
         </CardHeader>
         <div className="overflow-x-auto max-h-96">
@@ -643,11 +780,15 @@ export default function StaffUsersPage() {
                   </td>
                   <td className="p-3 font-mono font-bold text-primary">{l.resourceType ?? "API"}</td>
                   <td className="p-3 font-mono" dir="ltr">
-                    <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold me-1.5 ${
-                      l.method === "POST" ? "bg-emerald-500/15 text-emerald-600" :
-                      l.method === "PATCH" || l.method === "DELETE" ? "bg-amber-500/15 text-amber-600" :
-                      "bg-blue-500/15 text-blue-600"
-                    }`}>
+                    <span
+                      className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold me-1.5 ${
+                        l.method === "POST"
+                          ? "bg-emerald-500/15 text-emerald-600"
+                          : l.method === "PATCH" || l.method === "DELETE"
+                            ? "bg-amber-500/15 text-amber-600"
+                            : "bg-blue-500/15 text-blue-600"
+                      }`}
+                    >
                       {l.method}
                     </span>
                     {l.path}
@@ -665,14 +806,101 @@ export default function StaffUsersPage() {
         </div>
       </Card>
 
-      <Modal open={open} onClose={() => setOpen(false)} title={ar ? "موظف جديد" : "New staff member"}>
+      {/* Delete Staff Confirmation Modal */}
+      <Modal
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        title={ar ? "تأكيد حذف حساب الموظف نهائياً" : "Confirm Permanent Staff Deletion"}
+      >
+        {deleteTarget && (
+          <div className="flex flex-col gap-4">
+            <div className="rounded-xl border border-error/30 bg-error/10 p-3 text-xs text-error leading-relaxed">
+              {ar
+                ? `سيتم حذف حساب (${deleteTarget.fullNameAr}) نهائياً وإلغاء جميع صلاحيات دخوله للمنظومة، مع الحفاظ على سلامة السجلات الطبية السابقة.`
+                : `This will permanently delete (${deleteTarget.fullNameEn}) and revoke all portal sessions while preserving historical clinical audit integrity.`}
+            </div>
+            <div className="text-xs font-mono text-on-surface-variant" dir="ltr">
+              {deleteTarget.email} • {ROLES[deleteTarget.role]?.[locale] ?? deleteTarget.role}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)}>
+                {ar ? "إلغاء" : "Cancel"}
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                loading={busy}
+                icon={<Trash2 className="h-4 w-4" />}
+                onClick={confirmDeleteStaff}
+              >
+                {ar ? "تأكيد الحذف النهائي" : "Delete Permanently"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Single Staff Member Onboarding Modal */}
+      <Modal open={open} onClose={() => setOpen(false)} title={ar ? "إضافة موظف جديد" : "New staff member"}>
         <form onSubmit={create} className="flex flex-col gap-3">
           <input className={field} type="email" dir="ltr" required placeholder="email@hospital.gov.eg" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
           <select className={field} value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })}>
-            {Object.entries(ROLES).filter(([k]) => k !== "PATIENT").map(([k, v]) => (
+            {Object.entries(ROLES).map(([k, v]) => (
               <option key={k} value={k}>{v[locale]}</option>
             ))}
           </select>
+
+          {f.role === "LAB_TECH" && (
+            <div className="rounded-xl border border-outline-variant/40 bg-surface-container-low/70 p-2.5 space-y-1.5">
+              <span className="text-[11px] font-bold text-primary block">
+                {ar ? "تحديد المسار الوظيفي داخل المعمل / مركز الأشعة:" : "Lab vs Radiology Sub-Role:"}
+              </span>
+              <div className="grid grid-cols-2 gap-1.5">
+                {[
+                  { en: "Diagnostic Lab Specialist", ar: "أخصائي تحاليل طبية", label: ar ? "🧪 أخصائي تحاليل" : "Analysis Specialist" },
+                  { en: "LAB_RECEPTION", ar: "استقبال معمل التحاليل", label: ar ? "🧪 استقبال تحاليل" : "Lab Reception" },
+                  { en: "RADIOLOGY_SPECIALIST", ar: "أخصائي أشعة تشخيصية", label: ar ? "🩻 أخصائي أشعة" : "Radiology Specialist" },
+                  { en: "RADIOLOGY_RECEPTION", ar: "استقبال مركز الأشعة", label: ar ? "🩻 استقبال أشعة" : "Radiology Reception" },
+                ].map((opt) => (
+                  <button
+                    key={opt.en}
+                    type="button"
+                    onClick={() => setF({ ...f, specialityEn: opt.en, specialityAr: opt.ar })}
+                    className={`rounded-lg px-2 py-1.5 text-[11px] font-semibold border transition ${
+                      f.specialityEn === opt.en
+                        ? "border-primary bg-primary text-on-primary"
+                        : "border-outline-variant/40 bg-surface-container-lowest text-on-surface"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {f.role === "RECEPTIONIST" && (
+            <div className="grid grid-cols-2 gap-1.5">
+              {[
+                { en: "Reception Officer", ar: "موظف استقبال مواطنين", label: ar ? "استقبال مواطنين عام" : "Citizen Desk" },
+                { en: "CLINIC_ASSISTANT", ar: "مساعد طبيب وإدارة عيادة", label: ar ? "مساعد عيادة طبيب" : "Clinic Assistant" },
+              ].map((opt) => (
+                <button
+                  key={opt.en}
+                  type="button"
+                  onClick={() => setF({ ...f, specialityEn: opt.en, specialityAr: opt.ar })}
+                  className={`rounded-lg px-2 py-1.5 text-[11px] font-semibold border transition ${
+                    f.specialityEn === opt.en
+                      ? "border-primary bg-primary text-on-primary"
+                      : "border-outline-variant/40 bg-surface-container-lowest text-on-surface"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           <input className={field} dir="ltr" required minLength={2} maxLength={120} placeholder="Full name (English)" value={f.fullNameEn} onChange={(e) => setF({ ...f, fullNameEn: e.target.value })} />
           <input className={field} required minLength={2} maxLength={120} placeholder="الاسم بالعربية" value={f.fullNameAr} onChange={(e) => setF({ ...f, fullNameAr: e.target.value })} />
           <input className={field} dir="ltr" maxLength={60} placeholder={ar ? "رقم الترخيص المهني (اختياري)" : "License no. (optional)"} value={f.licenseNo} onChange={(e) => setF({ ...f, licenseNo: e.target.value })} />
@@ -681,21 +909,21 @@ export default function StaffUsersPage() {
             <input className={field} maxLength={120} placeholder="التخصص (عربي)" value={f.specialityAr} onChange={(e) => setF({ ...f, specialityAr: e.target.value })} />
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <input className={field} dir="ltr" maxLength={160} placeholder="Facility / Hospital (EN)" value={f.facilityEn} onChange={(e) => setF({ ...f, facilityEn: e.target.value })} />
-            <input className={field} maxLength={160} placeholder="المنشأة الطبية (عربي)" value={f.facilityAr} onChange={(e) => setF({ ...f, facilityAr: e.target.value })} />
+            <input className={field} dir="ltr" maxLength={160} placeholder="Facility / Hospital / Pharmacy (EN)" value={f.facilityEn} onChange={(e) => setF({ ...f, facilityEn: e.target.value })} />
+            <input className={field} maxLength={160} placeholder="المنشأة الطبية / الصيدلية (عربي)" value={f.facilityAr} onChange={(e) => setF({ ...f, facilityAr: e.target.value })} />
           </div>
           <Button type="submit" loading={busy}>{ar ? "إنشاء الحساب" : "Create account"}</Button>
         </form>
       </Modal>
 
-      {/* 1-Click Facility + Staff Bundle Onboarding Modal */}
+      {/* 1-Click Facility + Staff Bundle Onboarding Modal (Clinic, Analysis/Radiology Lab, Hospital, Pharmacy) */}
       <Modal
         open={bundleOpen}
         onClose={() => setBundleOpen(false)}
-        title={ar ? "تسجيل منشأة طبية جديدة بطاقمها الكامل بالشبكة القومية" : "Onboard New Medical Facility + Dedicated Staff Team"}
+        title={ar ? "تسجيل منشأة جديدة (عيادة / معمل تحاليل أو أشعة / مستشفى / صيدلية) بالموظفين" : "Onboard New Facility + Dedicated Staff Team"}
       >
         <form onSubmit={createBundle} className="flex flex-col gap-3">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <button
               type="button"
               onClick={() => setBundleForm({ ...bundleForm, facilityType: "CLINIC" })}
@@ -706,7 +934,7 @@ export default function StaffUsersPage() {
               }`}
             >
               <Stethoscope className="h-4 w-4" />
-              {ar ? "عيادة طبيب + مساعد" : "Doctor Clinic"}
+              {ar ? "عيادة طبيب" : "Clinic"}
             </button>
             <button
               type="button"
@@ -718,7 +946,7 @@ export default function StaffUsersPage() {
               }`}
             >
               <FlaskConical className="h-4 w-4" />
-              {ar ? "معمل + موظفوه" : "Diagnostic Lab"}
+              {ar ? "معمل" : "Lab / Imaging"}
             </button>
             <button
               type="button"
@@ -730,9 +958,56 @@ export default function StaffUsersPage() {
               }`}
             >
               <HospitalIcon className="h-4 w-4" />
-              {ar ? "مستشفى + طاقمه" : "Hospital + Beds"}
+              {ar ? "مستشفى" : "Hospital"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setBundleForm({ ...bundleForm, facilityType: "PHARMACY" })}
+              className={`flex flex-col items-center gap-1 rounded-xl border p-2.5 text-xs font-bold transition ${
+                bundleForm.facilityType === "PHARMACY"
+                  ? "border-primary bg-primary-container text-on-primary-container"
+                  : "border-outline-variant/40 bg-surface-container-low text-on-surface-variant"
+              }`}
+            >
+              <Pill className="h-4 w-4" />
+              {ar ? "صيدلية" : "Pharmacy"}
             </button>
           </div>
+
+          {/* Lab Sub-Type Selector: Analysis Lab vs Radiology Center */}
+          {bundleForm.facilityType === "LAB" && (
+            <div className="rounded-xl border border-warning/40 bg-warning/10 p-3 space-y-2">
+              <p className="text-xs font-bold text-on-surface">
+                {ar ? "حدد نوع المعمل المطلوب إضافته:" : "Specify Laboratory Specialization:"}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBundleForm({ ...bundleForm, labSubType: "ANALYSIS" })}
+                  className={`flex items-center justify-center gap-2 rounded-lg border p-2.5 text-xs font-bold transition ${
+                    bundleForm.labSubType === "ANALYSIS"
+                      ? "border-primary bg-primary text-on-primary"
+                      : "border-outline-variant/50 bg-surface-container-lowest text-on-surface"
+                  }`}
+                >
+                  <FlaskConical className="h-4 w-4" />
+                  {ar ? "معمل تحاليل طبية" : "Medical Analysis Lab"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBundleForm({ ...bundleForm, labSubType: "RADIOLOGY" })}
+                  className={`flex items-center justify-center gap-2 rounded-lg border p-2.5 text-xs font-bold transition ${
+                    bundleForm.labSubType === "RADIOLOGY"
+                      ? "border-primary bg-primary text-on-primary"
+                      : "border-outline-variant/50 bg-surface-container-lowest text-on-surface"
+                  }`}
+                >
+                  <ScanEye className="h-4 w-4" />
+                  {ar ? "معمل / مركز أشعة" : "Radiology Center"}
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input
@@ -741,10 +1016,14 @@ export default function StaffUsersPage() {
               minLength={2}
               placeholder={
                 bundleForm.facilityType === "CLINIC"
-                  ? "اسم العيادة بالعربية (مثلاً: عيادة د. شريف للقلب - المعادي)"
+                  ? "اسم العيادة بالعربية (مثلاً: عيادة د. شريف للقلب)"
                   : bundleForm.facilityType === "LAB"
-                    ? "اسم المعمل بالعربية (مثلاً: معمل رويال لاب - مدينة نصر)"
-                    : "اسم المستشفى بالعربية (مثلاً: مستشفى السلام الدولي - المعادي)"
+                    ? bundleForm.labSubType === "RADIOLOGY"
+                      ? "اسم مركز الأشعة بالعربية (مثلاً: مركز ألفا للأشعة - المهندسين)"
+                      : "اسم معمل التحاليل بالعربية (مثلاً: معمل المختبر - المعادي)"
+                    : bundleForm.facilityType === "PHARMACY"
+                      ? "اسم الصيدلية بالعربية (مثلاً: صيدلية الشفاء - مدينة نصر)"
+                      : "اسم المستشفى بالعربية (مثلاً: مستشفى السلام الدولي)"
               }
               value={bundleForm.facilityAr}
               onChange={(e) => setBundleForm({ ...bundleForm, facilityAr: e.target.value })}
@@ -758,8 +1037,12 @@ export default function StaffUsersPage() {
                 bundleForm.facilityType === "CLINIC"
                   ? "Clinic Name (EN)"
                   : bundleForm.facilityType === "LAB"
-                    ? "Laboratory Name (EN)"
-                    : "Hospital Name (EN)"
+                    ? bundleForm.labSubType === "RADIOLOGY"
+                      ? "Radiology Center Name (EN)"
+                      : "Analysis Lab Name (EN)"
+                    : bundleForm.facilityType === "PHARMACY"
+                      ? "Pharmacy Name (EN)"
+                      : "Hospital Name (EN)"
               }
               value={bundleForm.facilityEn}
               onChange={(e) => setBundleForm({ ...bundleForm, facilityEn: e.target.value })}
@@ -792,10 +1075,14 @@ export default function StaffUsersPage() {
           <div className="rounded-xl border border-primary/25 bg-primary/5 p-3 space-y-2">
             <p className="text-xs font-bold text-primary">
               {bundleForm.facilityType === "CLINIC"
-                ? (ar ? "1️⃣ بيانات الطبيب صاحب العيادة (تُفتح له المواعيد والكشف تلقائياً)" : "1️⃣ Clinic Physician Account (Doctor + Schedule)")
+                ? (ar ? "1️⃣ بيانات الطبيب صاحب العيادة (تُفتح له المواعيد والكشف تلقائياً)" : "1️⃣ Clinic Physician Account")
                 : bundleForm.facilityType === "LAB"
-                  ? (ar ? "1️⃣ موظف استقبال المعمل (يستقبل حجوزات المواطنين من التطبيق ويؤكدها)" : "1️⃣ Lab Receptionist Account (Receives Mobile Bookings)")
-                  : (ar ? "1️⃣ مسؤول عمليات المستشفى والطوارئ (يستقبل الإحالات والأسرة)" : "1️⃣ Hospital & ER Operations Officer")}
+                  ? bundleForm.labSubType === "RADIOLOGY"
+                    ? (ar ? "1️⃣ موظف استقبال مركز الأشعة (يستقبل حجوزات الأشعة من التطبيق)" : "1️⃣ Radiology Receptionist")
+                    : (ar ? "1️⃣ موظف استقبال معمل التحاليل (يستقبل حجوزات سحب العينات)" : "1️⃣ Lab Receptionist")
+                  : bundleForm.facilityType === "PHARMACY"
+                    ? (ar ? "1️⃣ مدير الصيدلية / الصيدلي المسؤول (تحقق وصرف وتحصيل التأمين)" : "1️⃣ Chief Pharmacist")
+                    : (ar ? "1️⃣ مسؤول عمليات المستشفى والطوارئ (يستقبل الإحالات والأسرة)" : "1️⃣ Hospital & ER Operations Officer")}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <input
@@ -832,10 +1119,14 @@ export default function StaffUsersPage() {
           <div className="rounded-xl border border-secondary/30 bg-secondary/5 p-3 space-y-2">
             <p className="text-xs font-bold text-secondary">
               {bundleForm.facilityType === "CLINIC"
-                ? (ar ? "2️⃣ الموظف المساعد للطبيب (يدير حجوزات العيادة وطابور الدخول بدون ملف طبي)" : "2️⃣ Doctor's Clinic Assistant (Manages Appointments & Queue Only)")
+                ? (ar ? "2️⃣ الموظف المساعد للطبيب (يدير الحجوزات والطابور بدون ملف طبي)" : "2️⃣ Doctor's Clinic Assistant")
                 : bundleForm.facilityType === "LAB"
-                  ? (ar ? "2️⃣ أخصائي التحاليل الطبية (يدخل ويعتمد نتائج التحاليل في نفس المعمل)" : "2️⃣ Diagnostic Lab Specialist (Enters/Verifies Results)")
-                  : (ar ? "2️⃣ طبيب أخصائي بالمستشفى (+ تجهيز 2 سرير رعاية وتنويم فوراً)" : "2️⃣ Hospital Specialist Physician (+ 2 Initial Beds)")}
+                  ? bundleForm.labSubType === "RADIOLOGY"
+                    ? (ar ? "2️⃣ أخصائي الأشعة التشخيصية (+ توليد حساب مدير مركز الأشعة تلقائياً)" : "2️⃣ Radiology Specialist (+ Director)")
+                    : (ar ? "2️⃣ أخصائي التحاليل الطبية (+ توليد حساب مدير ومعتمد المعمل تلقائياً)" : "2️⃣ Lab Specialist (+ Verifier Director)")
+                  : bundleForm.facilityType === "PHARMACY"
+                    ? (ar ? "2️⃣ صيدلي الصرف المناوب (صرف الروشتات وحصص المزمن)" : "2️⃣ Dispensing Pharmacist")
+                    : (ar ? "2️⃣ طبيب أخصائي بالمستشفى (+ تجهيز 2 سرير رعاية وتنويم فوراً)" : "2️⃣ Hospital Specialist Physician (+ 2 Beds)")}
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <input
@@ -878,7 +1169,7 @@ export default function StaffUsersPage() {
       <Modal
         open={bundleCreds !== null}
         onClose={() => setBundleCreds(null)}
-        title={ar ? "تم تسجيل المنشأة الطبية وتفعيل حسابات فريق العمل" : "Facility & Staff Team Credentials Provisioned"}
+        title={ar ? "تم تسجيل المنشأة وتفعيل حسابات فريق العمل" : "Facility & Staff Team Credentials Provisioned"}
       >
         {bundleCreds && (
           <div className="flex flex-col gap-3">
@@ -886,8 +1177,8 @@ export default function StaffUsersPage() {
               <CheckCircle2 className="h-4 w-4 shrink-0" />
               <span>
                 {ar
-                  ? `المنشأة (${bundleCreds.facilityAr}) أصبحت فعالة فوراً وتظهر في تطبيق المواطن وبوابات الأطباء والمعامل.`
-                  : `${bundleCreds.facilityEn} is now live across the Citizen App and Web Portal.`}
+                  ? `المنشأة (${bundleCreds.facilityAr}) أصبحت فعالة فوراً بالشبكة القومية.`
+                  : `${bundleCreds.facilityEn} is now active on the MNIS network.`}
               </span>
             </div>
             {bundleCreds.accounts.map((acc, idx) => (

@@ -21,6 +21,7 @@ import {
   XCircle,
   RefreshCw,
   Globe,
+  Camera,
 } from "lucide-react";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { useToast } from "@/lib/toast/ToastProvider";
@@ -46,6 +47,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { CredentialModal } from "@/components/ui/CredentialModal";
+import { WebcamCapture } from "@/components/ui/WebcamCapture";
 import { pick } from "@/lib/utils/format";
 
 const field =
@@ -57,7 +59,7 @@ export default function CitizenAccountsPage() {
   const handleError = useApiError();
   const { user } = useAuth();
   const ar = locale === "ar";
-  const isMinistryOrAdmin = user?.role === "EXECUTIVE" || user?.role === "ADMIN";
+  const isMinistryOrAdmin = user?.role === "EXECUTIVE";
 
   const [governorates, setGovernorates] = useState<EgyptGovernorate[]>(
     EGYPT_GOVERNORATES_DEFAULT,
@@ -84,6 +86,10 @@ export default function CitizenAccountsPage() {
   const [addrAr, setAddrAr] = useState("");
   const [addrEn, setAddrEn] = useState("");
   const [addrBusy, setAddrBusy] = useState(false);
+  const [photoTarget, setPhotoTarget] = useState<NationalIdentity | null>(null);
+  const [photoDraft, setPhotoDraft] = useState("");
+  const [photoVerified, setPhotoVerified] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<NationalIdentity | null>(null);
   const [deleteReason, setDeleteReason] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -556,6 +562,18 @@ export default function CitizenAccountsPage() {
                 <Button
                   size="sm"
                   variant="outline"
+                  icon={<Camera className="w-3.5 h-3.5" />}
+                  onClick={() => {
+                    setPhotoTarget(p);
+                    setPhotoDraft(p.photoUrl.startsWith("data:image/jpeg") || p.photoUrl.startsWith("https://") ? p.photoUrl : "");
+                    setPhotoVerified(false);
+                  }}
+                >
+                  {ar ? "تحديث الصورة (ويب كام)" : "Webcam Photo"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
                   icon={<Phone className="w-3.5 h-3.5" />}
                   onClick={() => {
                     setPhoneTarget(p);
@@ -931,6 +949,61 @@ export default function CitizenAccountsPage() {
             </Button>
             <Button type="submit" loading={pushBusy} icon={<Bell className="w-4 h-4" />}>
               {ar ? "إرسال الإشعار الآن" : "Send Push Now"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+      <Modal
+        open={!!photoTarget}
+        onClose={() => setPhotoTarget(null)}
+        title={
+          photoTarget
+            ? ar
+              ? `التقاط / تحديث صورة المواطن: ${pick(photoTarget.fullName, locale)}`
+              : `Update Citizen Photo: ${pick(photoTarget.fullName, locale)}`
+            : ""
+        }
+      >
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!photoTarget || !photoDraft || !photoVerified) return;
+            setPhotoBusy(true);
+            try {
+              await api.updateCitizenPhoto(patientId(photoTarget), photoDraft);
+              push(
+                "success",
+                ar
+                  ? "تم حفظ صورة المواطن المطابقة لبطاقة الرقم القومي بنجاح"
+                  : "Verified citizen photo updated successfully",
+              );
+              setPhotoTarget(null);
+              await loadCitizens(searchQ);
+            } catch (err) {
+              handleError(err);
+            } finally {
+              setPhotoBusy(false);
+            }
+          }}
+          className="flex flex-col gap-3"
+        >
+          <WebcamCapture
+            value={photoDraft}
+            onChange={setPhotoDraft}
+            verified={photoVerified}
+            onVerifiedChange={setPhotoVerified}
+          />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="ghost" onClick={() => setPhotoTarget(null)}>
+              {ar ? "إلغاء" : "Cancel"}
+            </Button>
+            <Button
+              type="submit"
+              loading={photoBusy}
+              disabled={!photoDraft || !photoVerified}
+              icon={<Camera className="w-4 h-4" />}
+            >
+              {ar ? "حفظ الصورة بملف المواطن" : "Save Verified Photo"}
             </Button>
           </div>
         </form>

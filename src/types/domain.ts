@@ -1,4 +1,4 @@
-/** Shared domain types for the MNIS mock data layer.
+/** Shared clinical and administrative domain types for the MNIS portal.
  * Bilingual fields carry both an English and Arabic string so every screen
  * renders fully localized data, not just localized UI chrome. */
 

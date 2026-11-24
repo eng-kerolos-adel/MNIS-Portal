@@ -57,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (async () => {
       try {
         const params = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
-        if (params?.get("newSession") === "1" || params?.has("autoDemo")) {
+        if (params?.get("newSession") === "1") {
           clearTabSession();
           if (alive) setUser(null);
           return;

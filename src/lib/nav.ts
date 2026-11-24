@@ -12,7 +12,7 @@ export type NavItem = {
   href: string;
   icon: LucideIcon;
   labelKey: string;
-  live?: boolean; // true = fully built screen, false = placeholder module
+  live?: boolean;
 };
 
 export type PortalKey = "doctor" | "pharmacy" | "lab" | "hospital" | "analytics" | "reception" | "admin";
@@ -96,9 +96,15 @@ export const ROLE_PORTAL: Record<string, PortalKey | null> = {
 };
 
 export function homeFor(role: string, specialityEn?: string | null): string {
+  const spec = (specialityEn ?? "").toUpperCase();
   if (role === "DOCTOR") return "/doctor/consultation";
-  if (role === "RECEPTIONIST" && specialityEn === "CLINIC_ASSISTANT") return "/doctor/appointments";
-  if (role === "LAB_TECH" && specialityEn === "LAB_RECEPTION") return "/lab/appointments";
+  if (role === "RECEPTIONIST" && spec === "CLINIC_ASSISTANT") return "/doctor/appointments";
+  if (role === "LAB_TECH") {
+    if (spec === "RADIOLOGY_RECEPTION") return "/lab/appointments";
+    if (spec.startsWith("RADIOLOGY")) return "/lab/radiology";
+    if (spec === "LAB_RECEPTION") return "/lab/appointments";
+    return "/lab/sample-intake";
+  }
   const portal = ROLE_PORTAL[role];
   if (!portal) return "/login";
   const items = portalNav[portal];

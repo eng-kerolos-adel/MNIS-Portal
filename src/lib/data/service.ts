@@ -3,7 +3,6 @@
  * bilingual domain types the screens already use. Screens never see raw API shapes.
  */
 import { request } from "@/lib/api/client";
-import { PORTRAITS } from "@/lib/assets";
 import type {
   Bed, Bilingual, ConditionFlagItem, ERCase, LabResultPanel, LabResultRow, LabSample, Medication,
   NationalIdentity, PatientDocument, Prescription, QueueTicket,
@@ -18,10 +17,14 @@ const upper = (s: string) => s.toUpperCase().replace(/-/g, "_");
 const minutesSince = (iso: string) => Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
 const ageOf = (iso: string) => Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 31_557_600_000));
 
-function avatar(id: string) {
-  let h = 0;
-  for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return PORTRAITS[h % PORTRAITS.length]!;
+function genderAvatar(sex: "MALE" | "FEMALE") {
+  const bg = sex === "FEMALE" ? "#0D6E6E" : "#0F3D5E";
+  const label = sex === "FEMALE" ? "F" : "M";
+  const svg =
+    sex === "FEMALE"
+      ? `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><rect width="120" height="120" rx="20" fill="${bg}"/><circle cx="60" cy="44" r="20" fill="#E2E8F0"/><path d="M36 46c0-15 10-26 24-26s24 11 24 26v14c0 4-3 6-6 6H42c-3 0-6-2-6-6V46z" fill="#CBD5E1" opacity="0.55"/><path d="M26 106c4-20 18-30 34-30s30 10 34 30" fill="#E2E8F0"/><text x="104" y="22" font-family="sans-serif" font-size="12" font-weight="bold" fill="#99F6E4" text-anchor="end">${label}</text></svg>`
+      : `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><rect width="120" height="120" rx="20" fill="${bg}"/><circle cx="60" cy="44" r="20" fill="#E2E8F0"/><path d="M28 106c4-20 17-30 32-30s28 10 32 30" fill="#E2E8F0"/><text x="104" y="22" font-family="sans-serif" font-size="12" font-weight="bold" fill="#93C5FD" text-anchor="end">${label}</text></svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
 const bilingualList = (v: unknown): Bilingual[] =>
@@ -37,7 +40,7 @@ export function mapPatient(p: Raw): NationalIdentity {
     bloodType: p.bloodType ?? "—",
     phone: p.phone ?? null,
     phoneVerifiedAt: p.phoneVerifiedAt ?? null,
-    photoUrl: p.photoUrl ?? avatar(p.id ?? p.mti),
+    photoUrl: p.photoUrl || genderAvatar(p.sex === "FEMALE" ? "FEMALE" : "MALE"),
     governorate: p.governorate ?? null,
     district: p.district ?? null,
     address: b(p.addressEn, p.addressAr),
@@ -226,8 +229,10 @@ export const api = {
   }>("/analytics/kpis"),
 
   /* ---------------- reception ---------------- */
-  openCitizenAccount: (body: { nationalId: string; fullNameEn: string; fullNameAr: string; sex: "MALE" | "FEMALE"; birthDate: string; bloodType?: string; phone?: string; insuranceActive?: boolean; governorate?: string; district?: string; addressAr?: string; addressEn?: string; chronicConditions?: {en:string,ar:string}[]; allergies?: {en:string,ar:string}[] }) =>
+  openCitizenAccount: (body: { nationalId: string; fullNameEn: string; fullNameAr: string; sex: "MALE" | "FEMALE"; birthDate: string; bloodType?: string; phone?: string; photoUrl?: string; insuranceActive?: boolean; governorate?: string; district?: string; addressAr?: string; addressEn?: string; chronicConditions?: {en:string,ar:string}[]; allergies?: {en:string,ar:string}[] }) =>
     post<{ patientId: string; mti: string; loginId: string; phone?: string | null; temporaryPassword: string; nfcToken?: string }>("/reception/citizens", body),
+  updateCitizenPhoto: (patientId: string, photoUrl: string) =>
+    patch<Raw>(`/reception/citizens/${patientId}/photo`, { photoUrl }),
   updateCitizenPhone: (patientId: string, phone: string) =>
     patch<{ patientId: string; phone: string | null; phoneMasked: string | null; phoneVerifiedAt: string | null }>(`/reception/citizens/${patientId}/phone`, { phone }),
   updateCitizenAddress: (patientId: string, body: { governorate?: string; district?: string; addressAr: string; addressEn?: string }) =>
@@ -304,14 +309,29 @@ export const api = {
   listUsers: () => request<{ id: string; email: string | null; role: string; fullNameEn: string; fullNameAr: string; licenseNo: string | null; specialityEn?: string | null; specialityAr?: string | null; facilityEn?: string | null; facilityAr?: string | null; isActive: boolean; mustChangePassword: boolean }[]>("/admin/users"),
   getFacilities: () => request<{
     key: string;
-    facilityType: "CLINIC" | "LAB" | "HOSPITAL" | "PHARMACY" | "COMMAND";
+    facilityType: "CLINIC" | "LAB" | "RADIOLOGY" | "HOSPITAL" | "PHARMACY" | "RECEPTION" | "COMMAND";
     facilityEn: string;
     facilityAr: string;
     staffCount: number;
-    staff: { id: string; email: string | null; role: string; fullNameEn: string; fullNameAr: string; licenseNo: string | null; specialityEn?: string | null; specialityAr?: string | null; isActive: boolean }[];
+    staff: {
+      id: string;
+      email: string | null;
+      role: string;
+      fullNameEn: string;
+      fullNameAr: string;
+      licenseNo: string | null;
+      specialityEn?: string | null;
+      specialityAr?: string | null;
+      isActive: boolean;
+      mustChangePassword?: boolean;
+      failedLogins?: number;
+      lockedUntil?: string | null;
+      createdAt?: string;
+    }[];
   }[]>("/admin/users/facilities"),
   createFacilityBundle: (body: {
-    facilityType: "CLINIC" | "LAB" | "HOSPITAL";
+    facilityType: "CLINIC" | "LAB" | "HOSPITAL" | "PHARMACY";
+    labSubType?: "ANALYSIS" | "RADIOLOGY";
     facilityEn: string;
     facilityAr: string;
     primaryEmail: string;
@@ -335,6 +355,7 @@ export const api = {
     post<{ user: { id: string }; temporaryPassword: string }>("/admin/users", body),
   setUserActive: (id: string, isActive: boolean) => patch<Raw>(`/admin/users/${id}/active`, { isActive }),
   resetUserPassword: (id: string) => post<{ temporaryPassword: string }>(`/admin/users/${id}/reset-password`),
+  deleteStaff: (id: string) => request<{ ok: boolean; deletedId: string }>(`/admin/users/${id}`, { method: "DELETE" }),
   getActiveSessions: () => request<{ id: string; ip?: string | null; userAgent?: string | null; createdAt: string; expiresAt: string }[]>("/auth/sessions"),
   revokeAllSessions: () => post<{ revoked: number }>("/auth/sessions/revoke-all"),
 
@@ -402,4 +423,7 @@ export const api = {
 
   getNotifications: () => request<Raw[]>("/notifications"),
   markNotificationRead: (id: string) => request<Raw>(`/notifications/${id}/read`, { method: "PATCH" }),
+  markAllNotificationsRead: () => post<{ ok: boolean }>("/notifications/read-all"),
+  triggerEmergencyAlert: (body: { severity: "CRITICAL" | "URGENT"; location: string; patientMti?: string; details: string }) =>
+    post<{ ok: boolean; dispatchedCount: number; timestamp: string }>("/notifications/emergency-alert", body),
 };

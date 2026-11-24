@@ -126,7 +126,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShow((v) => !v)}
-                  className="absolute end-3 top-1/2 -translate-y-1/2 text-on-surface-variant"
+                  className="absolute inset-e-3 top-1/2 -translate-y-1/2 text-on-surface-variant"
                   aria-label="toggle password"
                 >
                   {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

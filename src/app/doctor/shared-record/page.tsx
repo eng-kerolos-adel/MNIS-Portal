@@ -48,7 +48,7 @@ export default function SharedRecordPage() {
             onSubmit={submit}
             className="flex flex-col gap-3 sm:flex-row sm:items-end"
           >
-            <label className="flex flex-1 flex-col gap-1.5 text-sm font-semibold">
+            <label className="flex flex-1 flex-col gap-1.5 text-sm font-semibold mt-5">
               {ar
                 ? "الكود الظاهر في تطبيق المريض (10 أحرف)"
                 : "Code shown in the patient's app (10 characters)"}

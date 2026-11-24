@@ -119,7 +119,7 @@ export default function ConsultationPage() {
   });
 
   useEffect(() => {
-    if (me?.role === "PHARMACIST" || me?.role === "ADMIN" || me?.role === "EXECUTIVE") {
+    if (me?.role === "PHARMACIST") {
       void api.getPharmacyInventory().then(setPharmacyStock).catch(() => setPharmacyStock([]));
     }
   }, [me?.role]);
@@ -287,7 +287,7 @@ export default function ConsultationPage() {
   }, [load]);
 
   const syncQueue = useCallback(async () => {
-    if (me && me.role !== "DOCTOR" && me.role !== "ADMIN") return;
+    if (me && me.role !== "DOCTOR") return;
     try {
       const q = await api.getQueue();
       setQueueTickets(q);
@@ -510,7 +510,7 @@ export default function ConsultationPage() {
     }
   }
 
-  if (me && me.role !== "DOCTOR" && me.role !== "ADMIN") {
+  if (me && me.role !== "DOCTOR") {
     return (
       <Card className="p-8 text-center max-w-xl mx-auto my-8 border-error/30 bg-error-container/15">
         <AlertTriangle className="h-10 w-10 text-error mx-auto mb-3" />
@@ -544,7 +544,7 @@ export default function ConsultationPage() {
       <Card className="p-4 border-primary/20 bg-surface-container-lowest">
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           <div>
-            <label className="mb-1 block text-xs font-bold text-primary">
+            <label className="mb-3 block text-xs font-bold text-primary">
               <UserCheck className="inline h-3.5 w-3.5 me-1" />
               {ar ? "مرضى طابور عيادتك الحاليين (بعد تسجيل حضورهم لدى المساعد):" : "Current Clinic Queue Patients (Checked-In):"}
             </label>
@@ -573,7 +573,7 @@ export default function ConsultationPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-bold text-tertiary">
+            <label className="mb-3 block text-xs font-bold text-tertiary">
               <ShieldCheck className="inline h-3.5 w-3.5 me-1" />
               {ar ? "أو استدعاء ملف مواطن بكود المشاركة المؤقت (من تطبيق الموبايل):" : "Or Redeem 10-Char Citizen App Share Code:"}
             </label>
@@ -584,7 +584,7 @@ export default function ConsultationPage() {
                 dir="ltr"
                 maxLength={10}
                 placeholder="A1B2C3D4E5"
-                className="h-10 flex-1 min-w-[160px] rounded-lg border border-outline-variant/40 bg-surface-container-low px-3 font-mono text-xs font-bold uppercase tracking-widest outline-none focus:border-primary"
+                className="h-10 flex-1 min-w-40 rounded-lg border border-outline-variant/40 bg-surface-container-low px-3 font-mono text-xs font-bold uppercase tracking-widest outline-none focus:border-primary"
               />
               <Button
                 size="sm"
@@ -592,6 +592,7 @@ export default function ConsultationPage() {
                 loading={redeemingShare}
                 disabled={shareCode.trim().length !== 10}
                 onClick={() => void handleRedeemShareCode()}
+                className="h-10"
               >
                 {ar ? "فك الكود واستدعاء السجل" : "Redeem & Load Record"}
               </Button>
@@ -622,7 +623,7 @@ export default function ConsultationPage() {
             <div className="flex items-center gap-4">
               <div className="relative h-16 w-16 shrink-0">
                 <Image src={patient.photoUrl} alt="" fill sizes="64px" className="rounded-xl object-cover" unoptimized />
-                <span className="absolute -bottom-1 -end-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-on-primary">
+                <span className="absolute -bottom-1 -inset-e-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-on-primary">
                   {patient.bloodType}
                 </span>
               </div>
@@ -1234,7 +1235,7 @@ export default function ConsultationPage() {
             </CardHeader>
             <CardContent className="flex flex-col gap-3 overflow-y-auto pt-2">
               <div className="relative">
-                <Search className="h-4 w-4 absolute top-3 start-3 text-on-surface-variant" />
+                <Search className="h-4 w-4 absolute top-3 inset-s-3 text-on-surface-variant" />
                 <input
                   className="h-10 w-full rounded-lg bg-surface-container-low ps-9 pe-9 text-sm outline-none ring-1 ring-outline-variant/40 focus:ring-2 focus:ring-secondary"
                   placeholder={
@@ -1247,7 +1248,7 @@ export default function ConsultationPage() {
                   autoFocus
                 />
                 {medSearching && (
-                  <Loader2 className="h-4 w-4 animate-spin absolute top-3 end-3 text-secondary" />
+                  <Loader2 className="h-4 w-4 animate-spin absolute top-3 inset-e-3 text-secondary" />
                 )}
               </div>
 

@@ -38,13 +38,16 @@ export function AppointmentsManager({ mode }: { mode: "clinic" | "lab" }) {
   const handleError = useApiError();
   const ar = locale === "ar";
   const isLab = mode === "lab";
+  const isRadiologyStaff =
+    isLab && Boolean(me?.specialityEn?.toUpperCase().startsWith("RADIOLOGY"));
 
   const [items, setItems] = useState<Appt[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [labs, setLabs] = useState<LabFacility[]>([]);
   const [facilityFilter, setFacilityFilter] = useState<string>("ALL");
+  const [apptQuery, setApptQuery] = useState<string>("");
   const [tab, setTab] = useState<"open" | "confirmed" | "all">("open");
-  const isGlobalAdmin = me?.role === "ADMIN" || me?.role === "EXECUTIVE";
+  const isGlobalAdmin = false;
   const [sel, setSel] = useState<Appt | null>(null);
   const [when, setWhen] = useState("");
   const [providerId, setProviderId] = useState("");
@@ -84,10 +87,28 @@ export function AppointmentsManager({ mode }: { mode: "clinic" | "lab" }) {
 
   const scoped = useMemo(() => {
     const byProvider = !isGlobalAdmin || facilityFilter === "ALL" ? items : items.filter((i) => i.doctorId === facilityFilter);
-    if (tab === "open") return byProvider.filter((i) => i.status === "REQUESTED");
-    if (tab === "confirmed") return byProvider.filter((i) => i.status === "CONFIRMED");
-    return byProvider;
-  }, [items, facilityFilter, tab, isGlobalAdmin]);
+    const q = apptQuery.trim().toLowerCase();
+    const bySearch = !q
+      ? byProvider
+      : byProvider.filter((i) => {
+          const text = [
+            i.patient.fullName.ar,
+            i.patient.fullName.en,
+            i.patient.mti,
+            i.reason,
+            i.testPanel,
+            i.doctor?.fullNameAr,
+            i.doctor?.fullNameEn,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+          return text.includes(q);
+        });
+    if (tab === "open") return bySearch.filter((i) => i.status === "REQUESTED");
+    if (tab === "confirmed") return bySearch.filter((i) => i.status === "CONFIRMED");
+    return bySearch;
+  }, [items, facilityFilter, tab, isGlobalAdmin, apptQuery]);
 
   const openCount = useMemo(
     () => (!isGlobalAdmin || facilityFilter === "ALL" ? items : items.filter((i) => i.doctorId === facilityFilter)).filter((i) => i.status === "REQUESTED").length,
@@ -247,7 +268,11 @@ export function AppointmentsManager({ mode }: { mode: "clinic" | "lab" }) {
           <div className="flex items-center justify-between gap-2 text-xs">
             <span className="flex items-center gap-2 font-bold text-primary">
               <Building2 className="h-4 w-4" />
-              {isLab ? (ar ? "المعمل النشط:" : "Assigned Laboratory:") : (ar ? "العيادة النشطة:" : "Assigned Clinic:")}{" "}
+              {isRadiologyStaff
+                ? (ar ? "مركز الأشعة النشط:" : "Assigned Radiology Center:")
+                : isLab
+                  ? (ar ? "معمل التحاليل النشط:" : "Assigned Analysis Lab:")
+                  : (ar ? "العيادة النشطة:" : "Assigned Clinic:")}{" "}
               <span className="text-on-surface">
                 {(ar ? me?.facilityAr : me?.facilityEn) || (ar ? me?.fullNameAr : me?.fullNameEn)}
               </span>
@@ -261,16 +286,30 @@ export function AppointmentsManager({ mode }: { mode: "clinic" | "lab" }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>{isLab ? (ar ? "حجوزات التحاليل الواردة من تطبيق المواطن" : "Incoming Lab Bookings") : (ar ? "طلبات مواعيد العيادة الواردة للطبيب" : "Incoming Clinic Appointment Requests")}</CardTitle>
-          <Tabs
-            tabs={[
-              { id: "open", label: ar ? "بانتظار التأكيد" : "Awaiting", count: openCount },
-              { id: "confirmed", label: isLab ? (ar ? "المؤكدة" : "Confirmed") : (ar ? "مؤكدة — تسجيل الحضور" : "Confirmed — Check-In"), count: confirmedCount },
-              { id: "all", label: ar ? "السجل الكامل" : "All" },
-            ]}
-            active={tab}
-            onChange={setTab}
-          />
+          <CardTitle>
+            {isRadiologyStaff
+              ? (ar ? "حجوزات الأشعة التشخيصية الواردة من تطبيق المواطن" : "Incoming Radiology Center Bookings")
+              : isLab
+                ? (ar ? "حجوزات التحاليل الطبية الواردة من تطبيق المواطن" : "Incoming Medical Analysis Lab Bookings")
+                : (ar ? "طلبات مواعيد العيادة الواردة للطبيب" : "Incoming Clinic Appointment Requests")}
+          </CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2 flex-col">
+            <input
+              value={apptQuery}
+              onChange={(e) => setApptQuery(e.target.value)}
+              placeholder={ar ? "بحث في المواعيد باسم المريض أو MTI أو نوع الفحص..." : "Search appointments by patient name, MTI, or test..."}
+              className="h-9 w-full rounded-lg bg-surface-container-low px-3 text-xs outline-none focus:ring-2 focus:ring-secondary/50"
+            />
+            <Tabs
+              tabs={[
+                { id: "open", label: ar ? "بانتظار التأكيد" : "Awaiting", count: openCount },
+                { id: "confirmed", label: isLab ? (ar ? "المؤكدة" : "Confirmed") : (ar ? "مؤكدة — تسجيل الحضور" : "Confirmed — Check-In"), count: confirmedCount },
+                { id: "all", label: ar ? "السجل الكامل" : "All" },
+              ]}
+              active={tab}
+              onChange={setTab}
+            />
+          </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           {scoped.length === 0 && (
