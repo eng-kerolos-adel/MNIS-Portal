@@ -312,6 +312,13 @@ export const api = {
     facilityType: "CLINIC" | "LAB" | "RADIOLOGY" | "HOSPITAL" | "PHARMACY" | "RECEPTION" | "COMMAND";
     facilityEn: string;
     facilityAr: string;
+    governorate?: string | null;
+    city?: string | null;
+    district?: string | null;
+    addressEn?: string | null;
+    addressAr?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
     staffCount: number;
     staff: {
       id: string;
@@ -322,6 +329,13 @@ export const api = {
       licenseNo: string | null;
       specialityEn?: string | null;
       specialityAr?: string | null;
+      governorate?: string | null;
+      city?: string | null;
+      district?: string | null;
+      addressEn?: string | null;
+      addressAr?: string | null;
+      latitude?: number | null;
+      longitude?: number | null;
       isActive: boolean;
       mustChangePassword?: boolean;
       failedLogins?: number;
@@ -343,16 +357,31 @@ export const api = {
     specialityEn?: string;
     specialityAr?: string;
     licenseNo?: string;
+    governorate?: string;
+    city?: string;
+    district?: string;
+    addressEn?: string;
+    addressAr?: string;
+    latitude?: number;
+    longitude?: number;
   }) => post<{
     facilityType: string;
     facilityEn: string;
     facilityAr: string;
     accounts: { user: Raw; temporaryPassword: string; roleLabelEn: string; roleLabelAr: string }[];
   }>("/admin/users/facilities", body),
+  updateStaffLocation: (id: string, body: { governorate: string; city?: string; district?: string; addressAr: string; addressEn?: string; latitude?: number; longitude?: number; applyToFacility?: boolean }) =>
+    patch<Raw>(`/admin/users/${id}/location`, body),
+  getAddressChangeRequests: () => request<Raw[]>("/admin/users/address-requests"),
+  approveAddressChangeRequest: (id: string, note?: string) => post<Raw>(`/admin/users/address-requests/${id}/approve`, note ? { note } : {}),
+  rejectAddressChangeRequest: (id: string, note?: string) => post<Raw>(`/admin/users/address-requests/${id}/reject`, note ? { note } : {}),
   getAuditLogs: () => request<Raw[]>("/admin/users/audit-logs"),
   getSecurityPosture: () => request<Raw>("/admin/users/security-posture"),
-  createStaff: (body: { email: string; role: string; fullNameEn: string; fullNameAr: string; licenseNo?: string; specialityEn?: string; specialityAr?: string; facilityEn?: string; facilityAr?: string }) =>
+  createStaff: (body: { email: string; role: string; fullNameEn: string; fullNameAr: string; licenseNo?: string; specialityEn?: string; specialityAr?: string; facilityEn?: string; facilityAr?: string; governorate?: string; city?: string; district?: string; addressAr?: string; addressEn?: string; latitude?: number; longitude?: number }) =>
     post<{ user: { id: string }; temporaryPassword: string }>("/admin/users", body),
+  requestMyAddressChange: (body: { newGovernorate: string; newCity?: string; newDistrict?: string; newAddressAr: string; newAddressEn?: string; newLatitude?: number; newLongitude?: number; reason?: string }) =>
+    post<Raw>("/schedule/address-change-requests", body),
+  getMyAddressChangeRequests: () => request<Raw[]>("/schedule/address-change-requests/my"),
   setUserActive: (id: string, isActive: boolean) => patch<Raw>(`/admin/users/${id}/active`, { isActive }),
   resetUserPassword: (id: string) => post<{ temporaryPassword: string }>(`/admin/users/${id}/reset-password`),
   deleteStaff: (id: string) => request<{ ok: boolean; deletedId: string }>(`/admin/users/${id}`, { method: "DELETE" }),
@@ -413,6 +442,11 @@ export const api = {
   getAnalyticsDrugIntel: () => request<Raw>("/analytics/drug-intelligence"),
   getAnalyticsFacility: () => request<Raw>("/analytics/facility-capacity"),
   getQuadMinistries: () => request<Raw>("/analytics/quad-ministries"),
+  getStrategicForecast: () => request<Raw>("/analytics/strategic-forecast"),
+  askStrategicAssistant: (body: { prompt: string; locale?: "ar" | "en"; focusGovernorate?: string }) =>
+    post<Raw>("/analytics/strategic-assistant", body),
+  dispatchStrategicDirective: (body: { governorate: string; severity: "ELEVATED" | "CRITICAL"; titleAr: string; titleEn: string; messageAr: string; messageEn: string }) =>
+    post<Raw>("/analytics/strategic-directive", body),
 
   /* ---------------- NEW: NFC Emergency Verification ---------------- */
   verifyNfcCard: (token: string) => post<Raw>("/nfc-cards/verify", { token }),
@@ -424,6 +458,7 @@ export const api = {
   getNotifications: () => request<Raw[]>("/notifications"),
   markNotificationRead: (id: string) => request<Raw>(`/notifications/${id}/read`, { method: "PATCH" }),
   markAllNotificationsRead: () => post<{ ok: boolean }>("/notifications/read-all"),
+  testSelfNotification: () => post<Raw>("/notifications/test-self"),
   triggerEmergencyAlert: (body: { severity: "CRITICAL" | "URGENT"; location: string; patientMti?: string; details: string }) =>
     post<{ ok: boolean; dispatchedCount: number; timestamp: string }>("/notifications/emergency-alert", body),
 };

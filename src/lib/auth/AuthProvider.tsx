@@ -26,6 +26,13 @@ export interface SessionUser {
   specialityAr?: string | null;
   facilityEn?: string | null;
   facilityAr?: string | null;
+  governorate?: string | null;
+  city?: string | null;
+  district?: string | null;
+  addressEn?: string | null;
+  addressAr?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   patientId: string | null;
   mustChangePassword: boolean;
 }

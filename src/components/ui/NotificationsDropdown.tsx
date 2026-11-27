@@ -2,47 +2,44 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Bell, CheckCheck, CheckCircle2, Clock, ExternalLink, Siren } from "lucide-react";
+import { Bell, BellRing, CheckCheck, CheckCircle2, Clock, ExternalLink, ListFilter, Siren } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
+import { useToast } from "@/lib/toast/ToastProvider";
 import { api } from "@/lib/data/service";
 import { subscribeUserSignal } from "@/lib/firebase/realtime";
+import {
+  getBrowserNotifPermission,
+  playNotificationChime,
+  requestBrowserNotifPermission,
+  showBrowserNotification,
+  type BrowserNotifPermission,
+} from "@/lib/notifications/browserNotifications";
 import { cn } from "@/lib/utils/cn";
 import { formatDate, formatTime } from "@/lib/utils/format";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-function getReadOpIds(userId?: string): string[] {
-  if (!userId || typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(`mnis.readNotifs.${userId}`);
-    return raw ? (JSON.parse(raw) as string[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveReadOpIds(userId: string | undefined, ids: string[]) {
-  if (!userId || typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(`mnis.readNotifs.${userId}`, JSON.stringify(ids.slice(-100)));
-  } catch {
-    /* ignore storage quota errors */
-  }
-}
-
 export function NotificationsDropdown() {
   const { locale, t } = useLocale();
   const { user } = useAuth();
+  const { push } = useToast();
   const router = useRouter();
   const ar = locale === "ar";
   const [open, setOpen] = useState(false);
   const [notifs, setNotifs] = useState<any[]>([]);
-  const [readOpIds, setReadOpIds] = useState<string[]>([]);
+  const [perm, setPerm] = useState<BrowserNotifPermission>("default");
   const ref = useRef<HTMLDivElement>(null);
+  const initializedRef = useRef(false);
+  const seenIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    setReadOpIds(getReadOpIds(user?.id));
+    setPerm(getBrowserNotifPermission());
+  }, []);
+
+  useEffect(() => {
+    initializedRef.current = false;
+    seenIdsRef.current = new Set();
   }, [user?.id]);
 
   useEffect(() => {
@@ -58,15 +55,45 @@ export function NotificationsDropdown() {
     if (typeof document !== "undefined" && document.hidden && !open) return;
     try {
       const data = await api.getNotifications();
-      setNotifs(data);
+      const rows = Array.isArray(data) ? data : [];
+
+      if (!initializedRef.current) {
+        rows.forEach((n: any) => seenIdsRef.current.add(String(n.id)));
+        initializedRef.current = true;
+      } else {
+        const fresh = rows.filter((n: any) => !seenIdsRef.current.has(String(n.id)) && !n.readAt);
+        if (fresh.length > 0) {
+          fresh.forEach((n: any) => seenIdsRef.current.add(String(n.id)));
+          const top = fresh[0];
+          if (top) {
+            const title = String(ar ? top.titleAr : top.titleEn);
+            const body = String(ar ? top.bodyAr : top.bodyEn);
+            const href = typeof top?.data?.href === "string" ? top.data.href : "/notifications";
+            const isCritical = top?.data?.category === "EMERGENCY_ALERT" || top?.data?.severity === "CRITICAL";
+
+            playNotificationChime(isCritical);
+            push(isCritical ? "error" : "info", title, body);
+            showBrowserNotification({
+              id: String(top.id),
+              title,
+              body,
+              href,
+              critical: isCritical,
+              onNavigate: (target) => router.push(target),
+            });
+          }
+        }
+      }
+
+      setNotifs(rows);
     } catch (e) {
       console.error(e);
     }
-  }, [user, open]);
+  }, [user, open, ar, push, router]);
 
   useEffect(() => {
     void fetchNotifs();
-    const int = setInterval(fetchNotifs, 20000);
+    const int = setInterval(fetchNotifs, 5000);
     const onPulse = () => void fetchNotifs();
     window.addEventListener("mnis:refresh-notifs", onPulse);
     const unsub = user?.id ? subscribeUserSignal(user.id, () => void fetchNotifs()) : () => {};
@@ -77,21 +104,24 @@ export function NotificationsDropdown() {
     };
   }, [fetchNotifs, user?.id]);
 
-  const readOpSet = useMemo(() => new Set(readOpIds), [readOpIds]);
-  const isUnread = useCallback(
-    (n: any) => (String(n.id).startsWith("op:") ? !readOpSet.has(n.id) : !n.readAt),
-    [readOpSet],
-  );
+  const unreadCount = useMemo(() => notifs.filter((n) => !n.readAt).length, [notifs]);
 
-  const unreadCount = useMemo(() => notifs.filter(isUnread).length, [notifs, isUnread]);
+  const handleEnableBrowserNotifs = async () => {
+    const next = await requestBrowserNotifPermission();
+    setPerm(next);
+    if (next === "granted") {
+      push("success", ar ? "تم تفعيل إشعارات المتصفح الحية بنجاح" : "Live browser notifications enabled");
+      try {
+        await api.testSelfNotification();
+        void fetchNotifs();
+      } catch {
+        /* non-blocking */
+      }
+    }
+  };
 
   const handleNotificationClick = async (n: any) => {
-    const isOp = String(n.id).startsWith("op:");
-    if (isOp) {
-      const next = Array.from(new Set([...readOpIds, String(n.id)]));
-      setReadOpIds(next);
-      saveReadOpIds(user?.id, next);
-    } else if (!n.readAt) {
+    if (!n.readAt) {
       try {
         await api.markNotificationRead(n.id);
         setNotifs((prev) => prev.map((x) => (x.id === n.id ? { ...x, readAt: new Date().toISOString() } : x)));
@@ -108,12 +138,6 @@ export function NotificationsDropdown() {
   };
 
   const handleMarkAllRead = async () => {
-    const opIds = notifs.filter((n) => String(n.id).startsWith("op:")).map((n) => String(n.id));
-    if (opIds.length > 0) {
-      const merged = Array.from(new Set([...readOpIds, ...opIds]));
-      setReadOpIds(merged);
-      saveReadOpIds(user?.id, merged);
-    }
     try {
       await api.markAllNotificationsRead();
       setNotifs((prev) => prev.map((x) => ({ ...x, readAt: x.readAt ?? new Date().toISOString() })));
@@ -123,7 +147,19 @@ export function NotificationsDropdown() {
   };
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative flex items-center gap-1.5" ref={ref}>
+      {perm === "default" && (
+        <button
+          type="button"
+          onClick={handleEnableBrowserNotifs}
+          className="hidden md:inline-flex items-center gap-1 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1.5 text-[11px] font-bold text-primary hover:bg-primary/15 transition-colors"
+          title={ar ? "اضغط لتفعيل إشعارات المتصفح الحية" : "Enable browser notifications"}
+        >
+          <BellRing className="h-3.5 w-3.5" />
+          <span>{ar ? "تفعيل إشعارات المتصفح" : "Enable Alerts"}</span>
+        </button>
+      )}
+
       <button
         type="button"
         onClick={() => {
@@ -143,7 +179,7 @@ export function NotificationsDropdown() {
       </button>
 
       {open && (
-        <div className="absolute top-full mt-2 end-0 w-80 sm:w-96 max-h-[28rem] overflow-y-auto bg-surface-container-lowest border border-outline-variant/40 shadow-level-3 rounded-xl z-50 flex flex-col">
+        <div className="absolute top-full mt-2 end-0 w-80 sm:w-96 max-h-[30rem] overflow-y-auto bg-surface-container-lowest border border-outline-variant/40 shadow-level-3 rounded-xl z-50 flex flex-col">
           <div className="flex items-center justify-between gap-2 p-3 border-b border-outline-variant/40 bg-surface-container-low sticky top-0 z-10">
             <div className="flex items-center gap-2">
               <span className="font-bold text-sm">{t("common.notifications")}</span>
@@ -164,15 +200,31 @@ export function NotificationsDropdown() {
               </button>
             )}
           </div>
+
+          {perm === "default" && (
+            <div className="flex items-center justify-between gap-2 bg-primary/5 border-b border-primary/20 px-3 py-2 text-[11px]">
+              <span className="text-on-surface font-medium">
+                {ar ? "فعّل إشعارات المتصفح لاستقبال التنبيهات فوراً" : "Enable OS browser alerts for real-time updates"}
+              </span>
+              <button
+                type="button"
+                onClick={handleEnableBrowserNotifs}
+                className="shrink-0 rounded-md bg-primary px-2 py-1 text-[10px] font-bold text-on-primary hover:opacity-90"
+              >
+                {ar ? "تفعيل الآن" : "Allow"}
+              </button>
+            </div>
+          )}
+
           <div className="flex flex-col">
             {notifs.length === 0 ? (
               <div className="p-6 text-center text-sm text-on-surface-variant flex flex-col items-center gap-2">
                 <CheckCircle2 className="h-6 w-6 opacity-30" />
-                {ar ? "لا يوجد إشعارات أو تنبيهات حالياً" : "No notifications at the moment"}
+                {ar ? "لا يوجد إشعارات حقيقية مسجلة حتى الآن" : "No notifications recorded yet"}
               </div>
             ) : (
-              notifs.map((n) => {
-                const unread = isUnread(n);
+              notifs.slice(0, 12).map((n) => {
+                const unread = !n.readAt;
                 const isEmergency = n?.data?.category === "EMERGENCY_ALERT";
                 const isCritical = isEmergency || n?.data?.severity === "CRITICAL";
                 const href = typeof n?.data?.href === "string" ? n.data.href : "";
@@ -217,6 +269,18 @@ export function NotificationsDropdown() {
               })
             )}
           </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              router.push("/notifications");
+            }}
+            className="sticky bottom-0 flex items-center justify-center gap-1.5 border-t border-outline-variant/40 bg-surface-container-low p-2.5 text-xs font-bold text-primary hover:bg-surface-container"
+          >
+            <ListFilter className="h-3.5 w-3.5" />
+            {ar ? "فتح شاشة الإشعارات الكاملة" : "Open Full Notifications Center"}
+          </button>
         </div>
       )}
     </div>

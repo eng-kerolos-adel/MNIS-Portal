@@ -25,6 +25,9 @@ import {
   ChevronDown,
   ChevronUp,
   X,
+  MapPin,
+  ExternalLink,
+  XCircle,
 } from "lucide-react";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { useToast } from "@/lib/toast/ToastProvider";
@@ -37,6 +40,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { CredentialModal } from "@/components/ui/CredentialModal";
+import { EgyptLocationFields, type LocationFieldsValue } from "@/components/ui/EgyptLocationFields";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type FacilityItem = Awaited<ReturnType<typeof api.getFacilities>>[number];
@@ -100,6 +104,37 @@ export default function StaffUsersPage() {
   const [bundleOpen, setBundleOpen] = useState(false);
   const [bundleCreds, setBundleCreds] = useState<BundleCreds | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FacilityStaffMember | null>(null);
+  const [addressRequests, setAddressRequests] = useState<any[]>([]);
+  const [editLocTarget, setEditLocTarget] = useState<FacilityItem | null>(null);
+  const [editLocVal, setEditLocVal] = useState<LocationFieldsValue>({
+    governorate: "",
+    city: "",
+    district: "",
+    addressAr: "",
+    addressEn: "",
+    latitude: undefined,
+    longitude: undefined,
+  });
+
+  const [bundleLoc, setBundleLoc] = useState<LocationFieldsValue>({
+    governorate: "",
+    city: "",
+    district: "",
+    addressAr: "",
+    addressEn: "",
+    latitude: undefined,
+    longitude: undefined,
+  });
+
+  const [staffLoc, setStaffLoc] = useState<LocationFieldsValue>({
+    governorate: "",
+    city: "",
+    district: "",
+    addressAr: "",
+    addressEn: "",
+    latitude: undefined,
+    longitude: undefined,
+  });
 
   const [bundleForm, setBundleForm] = useState<{
     facilityType: "CLINIC" | "LAB" | "HOSPITAL" | "PHARMACY";
@@ -148,14 +183,16 @@ export default function StaffUsersPage() {
 
   const load = useCallback(async () => {
     try {
-      const [facList, logs, pos] = await Promise.all([
+      const [facList, logs, pos, addrReqs] = await Promise.all([
         api.getFacilities().catch(() => []),
         api.getAuditLogs().catch(() => []),
         api.getSecurityPosture().catch(() => null),
+        api.getAddressChangeRequests().catch(() => []),
       ]);
       setFacilities(facList);
       setAuditLogs(logs);
       setPosture(pos);
+      setAddressRequests(addrReqs);
     } catch (e) {
       handleError(e);
     }
@@ -190,8 +227,16 @@ export default function StaffUsersPage() {
         specialityAr: f.specialityAr.trim() || undefined,
         facilityEn: f.facilityEn.trim() || undefined,
         facilityAr: f.facilityAr.trim() || undefined,
+        governorate: staffLoc.governorate.trim() || undefined,
+        city: staffLoc.city.trim() || undefined,
+        district: staffLoc.district.trim() || undefined,
+        addressAr: staffLoc.addressAr.trim() || undefined,
+        addressEn: staffLoc.addressEn.trim() || undefined,
+        latitude: staffLoc.latitude,
+        longitude: staffLoc.longitude,
       });
       setOpen(false);
+      setStaffLoc({ governorate: "", city: "", district: "", addressAr: "", addressEn: "", latitude: undefined, longitude: undefined });
       setF({
         email: "",
         role: "DOCTOR",
@@ -246,8 +291,16 @@ export default function StaffUsersPage() {
         specialityEn: bundleForm.specialityEn.trim() || undefined,
         specialityAr: bundleForm.specialityAr.trim() || undefined,
         licenseNo: bundleForm.licenseNo.trim() || undefined,
+        governorate: bundleLoc.governorate.trim() || undefined,
+        city: bundleLoc.city.trim() || undefined,
+        district: bundleLoc.district.trim() || undefined,
+        addressAr: bundleLoc.addressAr.trim() || undefined,
+        addressEn: bundleLoc.addressEn.trim() || undefined,
+        latitude: bundleLoc.latitude,
+        longitude: bundleLoc.longitude,
       });
       setBundleOpen(false);
+      setBundleLoc({ governorate: "", city: "", district: "", addressAr: "", addressEn: "", latitude: undefined, longitude: undefined });
       setBundleForm({
         facilityType: "CLINIC",
         labSubType: "ANALYSIS",
@@ -316,7 +369,73 @@ export default function StaffUsersPage() {
       facilityEn: fac.facilityEn,
       facilityAr: fac.facilityAr,
     });
+    setStaffLoc({
+      governorate: fac.governorate ?? "",
+      city: fac.city ?? "",
+      district: fac.district ?? "",
+      addressAr: fac.addressAr ?? "",
+      addressEn: fac.addressEn ?? "",
+      latitude: fac.latitude ?? undefined,
+      longitude: fac.longitude ?? undefined,
+    });
     setOpen(true);
+  }
+
+  function openEditFacilityLocation(fac: FacilityItem) {
+    setEditLocTarget(fac);
+    setEditLocVal({
+      governorate: fac.governorate ?? "",
+      city: fac.city ?? "",
+      district: fac.district ?? "",
+      addressAr: fac.addressAr ?? "",
+      addressEn: fac.addressEn ?? "",
+      latitude: fac.latitude ?? undefined,
+      longitude: fac.longitude ?? undefined,
+    });
+  }
+
+  async function saveFacilityLocation(e: FormEvent) {
+    e.preventDefault();
+    const firstStaff = editLocTarget?.staff[0];
+    if (!firstStaff || !editLocVal.governorate.trim() || editLocVal.addressAr.trim().length < 3) return;
+    setBusy(true);
+    try {
+      await api.updateStaffLocation(firstStaff.id, {
+        governorate: editLocVal.governorate,
+        city: editLocVal.city || undefined,
+        district: editLocVal.district || undefined,
+        addressAr: editLocVal.addressAr.trim(),
+        addressEn: editLocVal.addressEn.trim() || undefined,
+        latitude: editLocVal.latitude,
+        longitude: editLocVal.longitude,
+        applyToFacility: true,
+      });
+      setEditLocTarget(null);
+      push("success", ar ? "تم تحديث العنوان والموقع الجغرافي للمنشأة بنجاح" : "Facility address & location updated");
+      await load();
+    } catch (err) {
+      handleError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function decideAddressReq(id: string, approve: boolean) {
+    setBusy(true);
+    try {
+      if (approve) {
+        await api.approveAddressChangeRequest(id);
+        push("success", ar ? "تم اعتماد العنوان الجديد وتحديث موقع الطبيب وإشعاره" : "Doctor address change approved");
+      } else {
+        await api.rejectAddressChangeRequest(id);
+        push("info", ar ? "تم رفض طلب تغيير العنوان وإشعار الطبيب" : "Doctor address change rejected");
+      }
+      await load();
+    } catch (err) {
+      handleError(err);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function toggle(u: FacilityStaffMember) {
@@ -514,6 +633,70 @@ export default function StaffUsersPage() {
         </Card>
       </div>
 
+      {/* Doctor Clinic Address Change Requests */}
+      {addressRequests.filter((r) => r.status === "PENDING").length > 0 && (
+        <Card className="border-amber-500/40 bg-amber-500/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-300">
+              <MapPin className="h-4 w-4" />
+              {ar
+                ? `طلبات تغيير عناوين الأطباء والعيادات (${addressRequests.filter((r) => r.status === "PENDING").length})`
+                : `Doctor Clinic Address Change Requests (${addressRequests.filter((r) => r.status === "PENDING").length})`}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {addressRequests
+              .filter((r) => r.status === "PENDING")
+              .map((req) => (
+                <div
+                  key={req.id}
+                  className="flex flex-col justify-between gap-3 rounded-xl border border-outline-variant/40 bg-surface-container-lowest p-3 text-xs"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-bold text-on-surface">
+                        {ar ? req.doctor?.fullNameAr : req.doctor?.fullNameEn}
+                      </span>
+                      <Badge tone="warning">{req.newGovernorate}</Badge>
+                    </div>
+                    <p className="text-[11px] text-on-surface-variant">
+                      {ar ? "العنوان السابق:" : "Current:"} {req.currentAddressAr || "—"}
+                    </p>
+                    <p className="text-xs font-semibold text-primary">
+                      {ar ? "العنوان الجديد المطلوب:" : "New Requested Address:"} {req.newAddressAr}
+                      {req.newDistrict ? ` (${req.newDistrict})` : ""}
+                    </p>
+                    {req.reason && (
+                      <p className="text-[11px] text-on-surface-variant">
+                        {ar ? "السبب:" : "Reason:"} {req.reason}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      loading={busy}
+                      icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+                      onClick={() => decideAddressReq(req.id, true)}
+                    >
+                      {ar ? "موافقة وتطبيق فوري" : "Approve & Apply"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      icon={<XCircle className="h-3.5 w-3.5" />}
+                      onClick={() => decideAddressReq(req.id, false)}
+                    >
+                      {ar ? "رفض" : "Reject"}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Dedicated Admin Search Bar + Facility-Centric Staff Drill-Down */}
       <Card>
         <CardHeader className="flex flex-col gap-3">
@@ -612,12 +795,42 @@ export default function StaffUsersPage() {
                         {fac.staff.length} {ar ? "موظف" : "Staff"}
                       </Badge>
                     </div>
-                    <p className="text-[11px] text-on-surface-variant mt-0.5" dir="ltr">
-                      {fac.facilityEn}
+                    <p className="text-[11px] text-on-surface-variant mt-0.5 flex flex-wrap items-center gap-2">
+                      <span dir="ltr">{fac.facilityEn}</span>
+                      {(fac.addressAr || fac.governorate) && (
+                        <span className="inline-flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                          <MapPin className="h-3 w-3" />
+                          {fac.governorate ? `${fac.governorate} • ` : ""}
+                          {(ar ? fac.addressAr : fac.addressEn) || fac.city || ""}
+                        </span>
+                      )}
+                      {typeof fac.latitude === "number" && typeof fac.longitude === "number" && (
+                        <a
+                          href={`https://www.google.com/maps?q=${fac.latitude},${fac.longitude}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-secondary hover:underline"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          GPS
+                        </a>
+                      )}
                     </p>
                   </div>
 
                   <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      icon={<MapPin className="h-3.5 w-3.5" />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEditFacilityLocation(fac);
+                      }}
+                    >
+                      {ar ? "العنوان" : "Address"}
+                    </Button>
                     <Button
                       size="sm"
                       variant="outline"
@@ -912,6 +1125,7 @@ export default function StaffUsersPage() {
             <input className={field} dir="ltr" maxLength={160} placeholder="Facility / Hospital / Pharmacy (EN)" value={f.facilityEn} onChange={(e) => setF({ ...f, facilityEn: e.target.value })} />
             <input className={field} maxLength={160} placeholder="المنشأة الطبية / الصيدلية (عربي)" value={f.facilityAr} onChange={(e) => setF({ ...f, facilityAr: e.target.value })} />
           </div>
+          <EgyptLocationFields ar={ar} value={staffLoc} onChange={setStaffLoc} compact />
           <Button type="submit" loading={busy}>{ar ? "إنشاء الحساب" : "Create account"}</Button>
         </form>
       </Modal>
@@ -1072,6 +1286,8 @@ export default function StaffUsersPage() {
             />
           </div>
 
+          <EgyptLocationFields ar={ar} value={bundleLoc} onChange={setBundleLoc} required />
+
           <div className="rounded-xl border border-primary/25 bg-primary/5 p-3 space-y-2">
             <p className="text-xs font-bold text-primary">
               {bundleForm.facilityType === "CLINIC"
@@ -1215,6 +1431,31 @@ export default function StaffUsersPage() {
       </Modal>
 
       <CredentialModal open={pw !== null} onClose={() => setPw(null)} password={pw ?? ""} />
+
+      {/* Edit Facility / Doctor Location Modal */}
+      <Modal
+        open={editLocTarget !== null}
+        onClose={() => setEditLocTarget(null)}
+        title={
+          editLocTarget
+            ? ar
+              ? `تحديث العنوان الجغرافي — ${editLocTarget.facilityAr}`
+              : `Update Facility Address — ${editLocTarget.facilityEn}`
+            : ""
+        }
+      >
+        <form onSubmit={saveFacilityLocation} className="flex flex-col gap-3">
+          <EgyptLocationFields ar={ar} value={editLocVal} onChange={setEditLocVal} required />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setEditLocTarget(null)}>
+              {ar ? "إلغاء" : "Cancel"}
+            </Button>
+            <Button type="submit" loading={busy} icon={<MapPin className="h-4 w-4" />}>
+              {ar ? "حفظ العنوان وتطبيقه على المنشأة" : "Save Facility Location"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

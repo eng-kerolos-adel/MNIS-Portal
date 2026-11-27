@@ -109,6 +109,7 @@ export const dictionaries = {
         compliance: "Compliance & KPIs",
       },
       analytics: {
+        aiStrategist: "Ministry AI Strategist & Outbreak SEIR",
         ministries: "MoHP Strategic Decisions",
         overview: "Overview Command",
         uhia: "UHIA Coverage",
@@ -233,6 +234,7 @@ export const dictionaries = {
         compliance: "الامتثال ومؤشرات الأداء",
       },
       analytics: {
+        aiStrategist: "المساعد الاستراتيجي والتنبؤ الوبائي (SEIR)",
         ministries: "القرارات الاستراتيجية لوزارة الصحة",
         overview: "غرفة القيادة العامة",
         uhia: "تغطية التأمين الصحي الشامل",

@@ -4,7 +4,7 @@ import {
   TestTubes, ScanEye, Radar, Beaker, LineChart,
   Siren, BedDouble, Scissors, Ambulance, Droplets, ClipboardCheck,
   Gauge, Map, Pill, Search as SearchIcon, FileBarChart, Building2,
-  UserPlus, CalendarCheck, UsersRound, RefreshCw, QrCode,
+  UserPlus, CalendarCheck, UsersRound, RefreshCw, QrCode, BrainCircuit,
   type LucideIcon,
 } from "lucide-react";
 
@@ -55,6 +55,7 @@ export const portalNav: Record<PortalKey, NavItem[]> = {
     { href: "/hospital/compliance", icon: ClipboardCheck, labelKey: "nav.hospital.compliance", live: true },
   ],
   analytics: [
+    { href: "/analytics/ai-strategist", icon: BrainCircuit, labelKey: "nav.analytics.aiStrategist", live: true },
     { href: "/analytics/ministries", icon: Building2, labelKey: "nav.analytics.ministries", live: true },
     { href: "/analytics/overview", icon: Gauge, labelKey: "nav.analytics.overview", live: true },
     { href: "/analytics/uhia-coverage", icon: ShieldCheck, labelKey: "nav.analytics.uhia", live: true },

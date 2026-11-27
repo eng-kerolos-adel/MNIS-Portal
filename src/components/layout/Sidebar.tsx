@@ -1,10 +1,17 @@
 "use client";
 
+import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ShieldCheck, Headset } from "lucide-react";
+import { ShieldCheck, Headset, MapPin } from "lucide-react";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { useAuth } from "@/lib/auth/AuthProvider";
+import { useToast } from "@/lib/toast/ToastProvider";
+import { useApiError } from "@/lib/api/useApiError";
+import { api } from "@/lib/data/service";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
+import { EgyptLocationFields, type LocationFieldsValue } from "@/components/ui/EgyptLocationFields";
 import { cn } from "@/lib/utils/cn";
 import type { NavItem } from "@/lib/nav";
 
@@ -22,7 +29,54 @@ export function Sidebar({
   const pathname = usePathname();
   const { t, locale } = useLocale();
   const { user } = useAuth();
+  const { push } = useToast();
+  const handleError = useApiError();
   const ar = locale === "ar";
+
+  const [addrModalOpen, setAddrModalOpen] = useState(false);
+  const [addrBusy, setAddrBusy] = useState(false);
+  const [addrSubmitted, setAddrSubmitted] = useState(false);
+  const [addrReason, setAddrReason] = useState("");
+  const [locVal, setLocVal] = useState<LocationFieldsValue>({
+    governorate: user?.governorate ?? "",
+    city: user?.city ?? "",
+    district: user?.district ?? "",
+    addressAr: user?.addressAr ?? "",
+    addressEn: user?.addressEn ?? "",
+    latitude: user?.latitude ?? undefined,
+    longitude: user?.longitude ?? undefined,
+  });
+
+  async function submitAddressChange(e: FormEvent) {
+    e.preventDefault();
+    if (!locVal.governorate.trim() || locVal.addressAr.trim().length < 3) return;
+    setAddrBusy(true);
+    try {
+      await api.requestMyAddressChange({
+        newGovernorate: locVal.governorate,
+        newCity: locVal.city || undefined,
+        newDistrict: locVal.district || undefined,
+        newAddressAr: locVal.addressAr.trim(),
+        newAddressEn: locVal.addressEn.trim() || undefined,
+        newLatitude: locVal.latitude,
+        newLongitude: locVal.longitude,
+        reason: addrReason.trim() || undefined,
+      });
+      setAddrSubmitted(true);
+      setAddrModalOpen(false);
+      setAddrReason("");
+      push(
+        "success",
+        ar
+          ? "تم إرسال طلب تغيير عنوان العيادة وإشعار مدير النظام للمراجعة"
+          : "Address change request sent to System Admin",
+      );
+    } catch (err) {
+      handleError(err);
+    } finally {
+      setAddrBusy(false);
+    }
+  }
 
   return (
     <>
@@ -88,11 +142,47 @@ export function Sidebar({
                     ID: {user.licenseNo}
                   </p>
                 )}
+                {(user.addressAr || user.addressEn || user.governorate) && (
+                  <p className="text-[10px] text-on-surface-variant leading-snug pt-0.5 flex items-start gap-1">
+                    <MapPin className="h-3 w-3 shrink-0 mt-0.5 text-primary/70" />
+                    <span>
+                      {(ar ? user.addressAr : user.addressEn) || user.governorate}
+                    </span>
+                  </p>
+                )}
                 <p className="text-[10px] text-on-surface-variant pt-0.5">
                   {ar
                     ? "الوصول مقصور على مهام وصلاحيات حسابك فقط."
                     : "Access strictly scoped to your assigned role & portal."}
                 </p>
+                {user.role === "DOCTOR" && (
+                  <div className="pt-1 border-t border-outline-variant/30 flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLocVal({
+                          governorate: user.governorate ?? "",
+                          city: user.city ?? "",
+                          district: user.district ?? "",
+                          addressAr: user.addressAr ?? "",
+                          addressEn: user.addressEn ?? "",
+                          latitude: user.latitude ?? undefined,
+                          longitude: user.longitude ?? undefined,
+                        });
+                        setAddrModalOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1 text-[10px] font-semibold text-on-surface-variant hover:text-primary transition-colors"
+                    >
+                      <MapPin className="h-3 w-3" />
+                      {ar ? "طلب تغيير عنوان العيادة" : "Request Address Change"}
+                    </button>
+                    {addrSubmitted && (
+                      <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-bold text-amber-700 dark:text-amber-300">
+                        {ar ? "قيد المراجعة" : "Pending"}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -116,6 +206,36 @@ export function Sidebar({
           </div>
         </div>
       </aside>
+
+      <Modal
+        open={addrModalOpen}
+        onClose={() => setAddrModalOpen(false)}
+        title={ar ? "طلب تعديل عنوان العيادة لدى إدارة المنظومة" : "Request Clinic Address Update"}
+      >
+        <form onSubmit={submitAddressChange} className="flex flex-col gap-3">
+          <p className="text-xs text-on-surface-variant">
+            {ar
+              ? "يتم إرسال هذا الطلب مباشرة كإشعار لمدير النظام لاعتماد الموقع الجديد وتحديث ظهورك للمواطنين جغرافياً."
+              : "This request notifies the System Admin immediately to review and publish your new clinic location."}
+          </p>
+          <EgyptLocationFields ar={ar} value={locVal} onChange={setLocVal} required />
+          <textarea
+            rows={2}
+            value={addrReason}
+            onChange={(e) => setAddrReason(e.target.value)}
+            placeholder={ar ? "سبب تعديل العنوان (اختياري)..." : "Reason for clinic relocation (optional)..."}
+            className="w-full rounded-lg bg-surface-container-low p-3 text-sm outline-none focus:ring-2 focus:ring-secondary/50"
+          />
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setAddrModalOpen(false)}>
+              {ar ? "إلغاء" : "Cancel"}
+            </Button>
+            <Button type="submit" loading={addrBusy} icon={<MapPin className="h-4 w-4" />}>
+              {ar ? "إرسال الإشعار للأدمن" : "Notify Admin"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </>
   );
 }

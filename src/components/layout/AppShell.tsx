@@ -44,6 +44,8 @@ const PAGES_WITH_DEDICATED_SEARCH = new Set([
   "/admin/users",
   "/reception/citizens",
   "/reception/register",
+  "/notifications",
+  "/analytics/ai-strategist",
   "/search",
 ]);
 
@@ -67,12 +69,14 @@ export function AppShell({ portal, children }: { portal: PortalKey; children: Re
   const isAnalysisLabReception = !!user && user.role === "LAB_TECH" && spec === "LAB_RECEPTION";
   const isAnalysisLabStaff = !!user && user.role === "LAB_TECH" && !isRadiologyStaff;
 
+  const isSharedNotificationPage = pathname === "/notifications";
   const subRoleBlocked =
-    (isClinicAssistant && pathname !== "/doctor/appointments" && pathname !== "/doctor/queue") ||
-    (isRadiologyReception && pathname !== "/lab/appointments" && pathname !== "/lab/radiology") ||
-    (isRadiologyStaff && !isRadiologyReception && pathname !== "/lab/radiology" && pathname !== "/lab/appointments") ||
-    (isAnalysisLabReception && pathname !== "/lab/appointments" && pathname !== "/lab/sample-intake") ||
-    (isAnalysisLabStaff && pathname === "/lab/radiology");
+    !isSharedNotificationPage &&
+    ((isClinicAssistant && pathname !== "/doctor/appointments" && pathname !== "/doctor/queue") ||
+      (isRadiologyReception && pathname !== "/lab/appointments" && pathname !== "/lab/radiology") ||
+      (isRadiologyStaff && !isRadiologyReception && pathname !== "/lab/radiology" && pathname !== "/lab/appointments") ||
+      (isAnalysisLabReception && pathname !== "/lab/appointments" && pathname !== "/lab/sample-intake") ||
+      (isAnalysisLabStaff && pathname === "/lab/radiology"));
 
   // Strict per-role & per-facility isolation: NO superuser bypass even for ADMIN or EXECUTIVE
   const allowed =
